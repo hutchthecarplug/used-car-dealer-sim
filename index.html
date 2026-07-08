@@ -2,792 +2,132 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Used Car Dealer Sim</title>
-<meta name="description" content="Run an independent used car dealership. Buy at auction, manage reconditioning, work the F&I desk, and grow the operation.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Used Car Dealer Sim — Dealership Operations Simulator</title>
+<meta name="description" content="A browser-based used car dealership simulator. Buy at auction against MMR, manage reconditioning, price inventory, and run the F&I office. Free, no download, progress saves to your device.">
 <meta name="theme-color" content="#0E1116">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Dealer Sim">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<style>html,body{background:#0E1116;margin:0}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+:root{
+  --bg:#0E1116; --card:#151A22; --line:#232A36; --ink:#EDF1F7;
+  --mut:#8E939B; --dim:#5C636E; --blu:#3B7BFF; --grn:#3BD16F; --yel:#FFC42E; --red:#FF5A48;
+}
+*{box-sizing:border-box;font-variant-numeric:tabular-nums}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:680px;margin:0 auto;padding:0 20px}
+a{color:var(--blu);text-decoration:none}
+a:focus-visible,button:focus-visible{outline:2px solid var(--blu);outline-offset:2px}
+
+/* masthead */
+header{padding:56px 0 40px;border-bottom:1px solid var(--line)}
+.lights{display:flex;gap:7px;margin-bottom:18px}
+.lights span{width:9px;height:9px;border-radius:50%}
+.lights .g{background:var(--grn);box-shadow:0 0 7px #3BD16F88}
+.lights .y{background:var(--yel);box-shadow:0 0 7px #FFC42E88}
+.lights .r{background:var(--red);box-shadow:0 0 7px #FF5A4888}
+h1{font-size:26px;font-weight:800;letter-spacing:1.5px;margin:0;line-height:1.2}
+h1 em{font-style:normal;color:var(--blu)}
+.tagline{color:var(--mut);font-size:15px;margin:10px 0 26px;max-width:46ch}
+.play{display:inline-block;background:var(--blu);color:#fff;font-weight:700;font-size:15px;
+  padding:13px 34px;border-radius:8px;letter-spacing:.3px}
+.play:active{transform:scale(.98);opacity:.85}
+.meta{color:var(--dim);font-size:12px;margin-top:12px;letter-spacing:.3px}
+
+/* spec strip */
+.strip{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:34px 0 0}
+.strip div{flex:1;text-align:center;padding:11px 4px;border-left:1px solid var(--line)}
+.strip div:first-child{border-left:none;background:#10141B}
+.strip b{display:block;font-size:15px;font-weight:800}
+.strip small{color:var(--mut);font-size:10px;letter-spacing:.6px;text-transform:uppercase}
+
+/* sections */
+section{padding:36px 0;border-bottom:1px solid var(--line)}
+.kicker{color:var(--blu);font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin:0 0 14px}
+h2{font-size:18px;font-weight:800;margin:0 0 12px;letter-spacing:.2px}
+p{color:#C4CAD3;font-size:14.5px;margin:0 0 14px}
+p:last-child{margin-bottom:0}
+
+/* systems table */
+.sys{border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.sys .row{display:flex;gap:14px;padding:14px 16px;border-top:1px solid var(--line);background:var(--card)}
+.sys .row:first-child{border-top:none}
+.sys .k{flex:0 0 118px;font-weight:700;font-size:13px;padding-top:1px}
+.sys .v{color:var(--mut);font-size:13.5px;line-height:1.55}
+
+/* changelog */
+.log .entry{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:14px 16px}
+.log .ver{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.log .ver b{font-size:14px}
+.log .ver span{color:var(--dim);font-size:12px}
+.log p{font-size:13.5px;color:var(--mut);margin:0}
+
+footer{padding:30px 0 44px;color:var(--dim);font-size:12px;letter-spacing:.4px}
+footer b{color:var(--mut);font-weight:700}
+</style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel" data-presets="react">
-const { useState, useMemo, useEffect, useRef } = React;
+<div class="wrap">
 
-// ---------- DATA ----------
-const MODELS = [
-  { name: "Honda Civic", tier: 0, base: 14000 },
-  { name: "Toyota Corolla", tier: 0, base: 13500 },
-  { name: "Hyundai Elantra", tier: 0, base: 11500 },
-  { name: "Nissan Sentra", tier: 0, base: 10500 },
-  { name: "Chevy Malibu", tier: 0, base: 12000 },
-  { name: "Honda Accord", tier: 1, base: 18500 },
-  { name: "Toyota Camry", tier: 1, base: 18000 },
-  { name: "Mazda CX-5", tier: 1, base: 19500 },
-  { name: "Ford F-150", tier: 1, base: 26000 },
-  { name: "Chevy Equinox", tier: 1, base: 16500 },
-  { name: "Jeep Grand Cherokee", tier: 1, base: 22000 },
-  { name: "BMW 330i", tier: 2, base: 27000 },
-  { name: "Mercedes C300", tier: 2, base: 28500 },
-  { name: "Lexus ES 350", tier: 2, base: 29000 },
-  { name: "Audi A4", tier: 2, base: 25500 },
-  { name: "Mercedes S550", tier: 2, base: 46000 },
-];
-const BUYERS = ["Marcus", "Danielle", "Tony", "Priya", "Jamal", "Kelsey", "Omar", "Rich", "Gloria", "Steve", "Fatima", "Dre", "Linda", "Hector", "Yusuf"];
-const CAPS = [10, 30, 50, 100];
-const CAP_COST = { 30: 25000, 50: 60000, 100: 150000 };
-const LOAN_CAP = { 10: 100000, 30: 300000, 50: 500000, 100: 1000000 };
-const LINE_APR = 0.12; // simple interest on the credit line, billed daily
-const pmt = (amount, apr, months) => {
-  if (amount <= 0) return 0;
-  const r = apr / 100 / 12;
-  return (r * amount) / (1 - Math.pow(1 + r, -months));
-};
+<header>
+  <div class="lights"><span class="g"></span><span class="y"></span><span class="r"></span></div>
+  <h1>USED CAR DEALER <em>SIM</em></h1>
+  <p class="tagline">A browser-based dealership operations simulator. Acquire inventory at auction, manage reconditioning, price against the market, and run the F&amp;I office.</p>
+  <a class="play" href="play.html">Play now</a>
+  <div class="meta">Free · No download · No account · Progress saves to your device</div>
 
-// ---------- SAVE SYSTEM ----------
-// Uses Claude artifact storage when available, falls back to localStorage for self-hosted builds.
-const SAVE_KEY = "ucds-save-v1";
-const store = {
-  async get(k) {
-    if (typeof window !== "undefined" && window.storage) {
-      try { const r = await window.storage.get(k); return r ? r.value : null; } catch { return null; }
-    }
-    try { return localStorage.getItem(k); } catch { return null; }
-  },
-  async set(k, v) {
-    if (typeof window !== "undefined" && window.storage) {
-      try { await window.storage.set(k, v); return; } catch { return; }
-    }
-    try { localStorage.setItem(k, v); } catch {}
-  },
-  async del(k) {
-    if (typeof window !== "undefined" && window.storage) {
-      try { await window.storage.delete(k); return; } catch { return; }
-    }
-    try { localStorage.removeItem(k); } catch {}
-  },
-};
+  <div class="strip">
+    <div><b>$10,000</b><small>Opening balance</small></div>
+    <div><b>10–100</b><small>Lot capacity</small></div>
+    <div><b>3</b><small>Credit tiers</small></div>
+    <div><b>4</b><small>F&amp;I products</small></div>
+  </div>
+</header>
 
-const PRODUCTS = [
-  { key: "vsc", name: "Vehicle Service Contract", price: 2200, cost: 1100 },
-  { key: "gap", name: "GAP", price: 900, cost: 350, financeOnly: true },
-  { key: "tw", name: "Tire & Wheel", price: 800, cost: 350 },
-  { key: "app", name: "Appearance Protection", price: 700, cost: 250 },
-];
+<section>
+  <p class="kicker">Overview</p>
+  <p>Used Car Dealer Sim puts you in the owner's chair at an independent used car store. Every unit on the ground is your money: what you paid at the block, what the shop charged to make it front-line ready, and what it costs to hold while it sits. Revenue comes from two places — the spread between acquisition cost and selling price, and the F&amp;I office, where financed deals generate product sales and lender reserve.</p>
+  <p>The simulation is built around the numbers the trade actually runs on: MMR as the wholesale anchor, condition announcements at auction, days-in-stock pressure on retail pricing, credit-tiered lending with realistic rates and terms, and per-copy gross tracked front and back.</p>
+</section>
 
-const fmt = (n) => "$" + Math.round(n).toLocaleString();
-const rnd = (a, b) => a + Math.random() * (b - a);
-const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+<section>
+  <p class="kicker">Systems</p>
+  <div class="sys">
+    <div class="row"><div class="k">Auction</div><div class="v">A daily run list with live bidding against a competitor. Each unit carries a condition light and a reconditioning estimate. Green announcements are clean; yellow and red conceal risk — the shop bill can come in well over the estimate.</div></div>
+    <div class="row"><div class="k">Book values</div><div class="v">Every vehicle displays MMR, trade-in, and retail. The margin is made at acquisition: the spread between your buy figure and retail, less reconditioning and holding cost, is the deal.</div></div>
+    <div class="row"><div class="k">Retail desk</div><div class="v">Set asking prices against retail value. Pricing discipline drives traffic; units over 30 days in stock are flagged as aged and pull fewer customers. Offers can be accepted, countered, or declined — counters carry walk risk.</div></div>
+    <div class="row"><div class="k">Trade-ins</div><div class="v">Roughly a third of customers bring a trade with a requested ACV. Accept the number and the unit is yours — including whatever reconditioning it actually needs.</div></div>
+    <div class="row"><div class="k">F&amp;I office</div><div class="v">About 60% of customers finance. Deals clear the lender first, then reach the menu: service contract, GAP, tire &amp; wheel, and appearance protection, each presented once. Payment, APR, term, and down payment are computed from the customer's credit profile and update live as products are added.</div></div>
+    <div class="row"><div class="k">Credit line</div><div class="v">Working capital at 12% APR, billed daily against the outstanding balance. The limit scales with lot capacity, from $100,000 at 10 spots to $1,000,000 at 100.</div></div>
+  </div>
+</section>
 
-let UID = 1;
+<section>
+  <p class="kicker">Operator's manual</p>
+  <h2>Buy under MMR or don't buy</h2>
+  <p>The competitor at the auction bids to a maximum derived from MMR. If you find yourself paying over the number, you are inheriting someone else's problem plus a buy fee. Walk. There is another run list tomorrow, and the discipline to pass is worth more than any single unit.</p>
+  <h2>Condition lights price the risk, not the car</h2>
+  <p>A red-light unit at the right money outperforms a green-light unit at the wrong money. The estimate on yellow and red announcements can run 50% over once the shop tears in, so bid as if it will. Green lights cost more at the block precisely because they carry no surprise.</p>
+  <h2>Turn beats gross</h2>
+  <p>Every unit accrues holding cost daily, and the credit line bills interest every morning whether you sell or not. A $1,800 front in 12 days beats a $2,600 front in 45. When a unit crosses 30 days in stock, reprice it — aged inventory pulls less traffic at any number, and the loss compounds.</p>
+  <h2>The back end carries the store</h2>
+  <p>Front-end margin on a competitively priced unit is thin. The store's real profitability lives in the F&amp;I office: reserve on financed paper and product penetration. Service contracts convert better on high-mileage units; GAP converts best on subprime paper, which also carries the largest reserve. A subprime customer with a full menu regularly out-grosses a prime cash buyer paying closer to ask.</p>
+  <h2>Manage the line like inventory</h2>
+  <p>The credit line is leverage, and leverage cuts both ways. Drawn capital sitting idle is pure interest expense; drawn capital in fast-turning inventory is how the store scales. Repay when cash is heavy, draw when the run list is strong, and never let the balance ride against a lot full of aged units.</p>
+</section>
 
-function genCar() {
-  const m = pick(MODELS);
-  const year = 2014 + Math.floor(rnd(0, 9));
-  const age = 2026 - year;
-  const miles = Math.round((age * rnd(8000, 16000)) / 500) * 500;
-  const light = Math.random() < 0.45 ? "green" : Math.random() < 0.65 ? "yellow" : "red";
-  const reconEst = light === "green" ? Math.round(rnd(100, 600) / 50) * 50
-    : light === "yellow" ? Math.round(rnd(800, 2400) / 50) * 50
-    : Math.round(rnd(2600, 5800) / 50) * 50;
-  const reconActual = light === "green" ? reconEst
-    : Math.round((reconEst * rnd(0.75, 1.5)) / 50) * 50;
-  let retail = m.base * (1 - age * 0.055) * (1 - miles / 400000);
-  retail *= rnd(0.94, 1.06);
-  retail = Math.max(4500, Math.round(retail / 100) * 100);
-  const mmr = Math.round((retail - reconEst - rnd(2600, 3400)) / 100) * 100; // condition-adjusted wholesale
-  const tradeVal = Math.round((mmr - rnd(300, 800)) / 100) * 100;
-  return { id: UID++, name: `${year} ${m.name}`, year, miles, light, reconEst, reconActual, retail, mmr, tradeVal, tier: m.tier };
-}
+<section class="log">
+  <p class="kicker">Changelog</p>
+  <div class="entry">
+    <div class="ver"><b>Version 1.0</b><span>July 2026</span></div>
+    <p>Initial release. Live auction bidding with condition announcements, MMR / trade / retail book values, reconditioning pipeline, retail pricing with days-in-stock aging, trade-in appraisal, credit-tiered lending with computed payments, four-product F&amp;I menu with lender reserve, 12% APR credit line, lot expansion to 100 units, and local auto-save.</p>
+  </div>
+</section>
 
-function genAuctionLot(cap) {
-  const n = cap >= 100 ? 20 : cap >= 50 ? 14 : cap >= 30 ? 10 : 6;
-  return Array.from({ length: n }, () => {
-    const c = genCar();
-    const rivalMax = Math.max(1500, Math.round((c.mmr * rnd(0.9, 1.1)) / 100) * 100);
-    const currentBid = Math.max(500, Math.round((rivalMax * 0.55) / 100) * 100);
-    return { ...c, rivalMax, currentBid, leader: "rival", closed: false };
-  });
-}
+<footer>
+  Created by <b>Hutchthecarplug</b> · © 2026 · Used Car Dealer Sim
+</footer>
 
-function genLeads(lot, marketing) {
-  const leads = [];
-  lot.filter((c) => c.status === "frontline").forEach((c) => {
-    const ratio = c.askPrice / c.retail;
-    let p = 0.75 - (ratio - 0.9) * 2.2;
-    p += marketing ? 0.15 : 0;
-    p *= Math.max(0.45, 1 - c.daysOnLot / 70);
-    p = Math.max(0.04, Math.min(0.85, p));
-    if (Math.random() < p) {
-      const offer = Math.round((c.askPrice * rnd(0.87, 0.97)) / 100) * 100;
-      // realistic independent-store mix: ~60% finance / 40% cash
-      const payType = Math.random() < 0.6 ? "finance" : "cash";
-      const r = Math.random();
-      const credit = payType === "cash" ? null : r < 0.4 ? "prime" : r < 0.75 ? "near-prime" : "subprime";
-      let trade = null;
-      if (Math.random() < 0.3) {
-        const t = genCar();
-        const wants = Math.round((t.tradeVal * rnd(0.9, 1.2)) / 100) * 100;
-        trade = { ...t, wants, status: "recon" };
-      }
-      leads.push({ id: UID++, carId: c.id, buyer: pick(BUYERS), offer, trade, countered: false, payType, credit });
-    }
-  });
-  return leads;
-}
-
-const START_LOT = () => Array.from({ length: 2 }, () => {
-  const c = genCar();
-  return { ...c, light: "green", cost: c.mmr + 400, status: "frontline", askPrice: Math.round((c.retail * 1.0) / 100) * 100, daysOnLot: Math.floor(rnd(2, 12)), reconDays: 0 };
-});
-
-// ---------- APP ----------
-function App() {
-  const [tab, setTab] = useState("lot");
-  const [day, setDay] = useState(1);
-  const [cash, setCash] = useState(10000);
-  const [loan, setLoan] = useState(0);
-  const [lot, setLot] = useState(START_LOT);
-  const [lotCap, setLotCap] = useState(10);
-  const [auction, setAuction] = useState(() => genAuctionLot(10));
-  const [leads, setLeads] = useState([]);
-  const [log, setLog] = useState(["Day 1 — Operations commenced. Opening balance $10,000. 2 units in inventory."]);
-  const [marketing, setMarketing] = useState(false);
-  const [stats, setStats] = useState({ sold: 0, front: 0, back: 0, bought: 0 });
-  const [editPrice, setEditPrice] = useState(null);
-  const [deal, setDeal] = useState(null); // F&I desk state
-  const [dead, setDead] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [booted, setBooted] = useState(false);
-  const saveTimer = useRef(null);
-
-  // Load save on start
-  useEffect(() => {
-    (async () => {
-      const raw = await store.get(SAVE_KEY);
-      if (raw) {
-        try {
-          const d = JSON.parse(raw);
-          setDay(d.day); setCash(d.cash); setLoan(d.loan); setLot(d.lot);
-          setLotCap(d.lotCap); setAuction(d.auction); setLeads(d.leads);
-          setMarketing(d.marketing); setStats(d.stats); setLog(d.log);
-          if (d.uid) UID = d.uid;
-        } catch { /* corrupted save — start fresh */ }
-      }
-      setBooted(true);
-    })();
-  }, []);
-
-  // Auto-save (debounced) on any state change
-  useEffect(() => {
-    if (!booted || dead) return;
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      store.set(SAVE_KEY, JSON.stringify({
-        day, cash, loan, lot, lotCap, auction, leads, marketing, stats, log, uid: UID,
-      }));
-    }, 400);
-    return () => clearTimeout(saveTimer.current);
-  }, [booted, dead, day, cash, loan, lot, lotCap, auction, leads, marketing, stats, log]);
-
-  const newGame = async () => {
-    await store.del(SAVE_KEY);
-    window.location.reload();
-  };
-
-  const netWorth = useMemo(
-    () => cash + lot.reduce((s, c) => s + c.mmr, 0) - loan,
-    [cash, lot, loan]
-  );
-  const loanCap = LOAN_CAP[lotCap];
-  const credit = loanCap - loan;
-
-  const draw = (amt) => {
-    const a = Math.min(amt, credit);
-    if (a <= 0) return addLog("Credit limit reached. Expand the lot to increase it.");
-    setLoan((v) => v + a);
-    setCash((v) => v + a);
-    addLog(`Credit line draw: ${fmt(a)} at 12% APR. Outstanding balance ${fmt(loan + a)}.`);
-  };
-  const repay = (amt) => {
-    const a = Math.min(amt, loan, cash);
-    if (a <= 0) return;
-    setLoan((v) => v - a);
-    setCash((v) => v - a);
-    addLog(`Credit line payment: ${fmt(a)}. Outstanding balance ${fmt(loan - a)}.`);
-  };
-  const addLog = (msg) => setLog((l) => [msg, ...l].slice(0, 50));
-
-  // ----- AUCTION -----
-  const bid = (id) => {
-    setAuction((a) => a.map((c) => {
-      if (c.id !== id || c.closed) return c;
-      const myBid = c.currentBid + 250;
-      if (myBid > cash) return c;
-      if (c.rivalMax >= myBid + 250 && Math.random() < 0.92) {
-        return { ...c, currentBid: myBid + 250, leader: "rival" };
-      }
-      return { ...c, currentBid: myBid, leader: "you" };
-    }));
-  };
-
-  const hammer = (id) => {
-    const c = auction.find((x) => x.id === id);
-    if (!c || c.leader !== "you") return;
-    const total = c.currentBid + 350;
-    if (total > cash) return addLog("Insufficient funds to cover the bid plus buyer fee.");
-    if (lot.length >= lotCap) return addLog("Lot at capacity. Sell inventory or expand.");
-    setCash((v) => v - total);
-    setAuction((a) => a.map((x) => (x.id === id ? { ...x, closed: true } : x)));
-    const reconDays = c.light === "green" ? 0 : c.light === "yellow" ? 1 : 2;
-    setLot((l) => [...l, {
-      ...c, cost: total, status: reconDays === 0 ? "frontline" : "recon", reconDays,
-      askPrice: Math.round((c.retail * 1.02) / 100) * 100, daysOnLot: 0,
-    }]);
-    setStats((s) => ({ ...s, bought: s.bought + 1 }));
-    addLog(`Purchased ${c.name} at auction: ${fmt(c.currentBid)} plus $350 buyer fee (MMR ${fmt(c.mmr)}).${c.light !== "green" ? " Assigned to reconditioning." : ""}`);
-  };
-
-  // ----- RECON -----
-  const startRecon = (id) => {
-    const c = lot.find((x) => x.id === id);
-    if (!c || c.reconActual > cash) return addLog("Insufficient funds for reconditioning.");
-    setCash((v) => v - c.reconActual);
-    setLot((l) => l.map((x) => (x.id === id ? { ...x, cost: x.cost + x.reconActual, reconPaid: true } : x)));
-    addLog(`Reconditioning on the ${c.name} totaled ${fmt(c.reconActual)}${c.reconActual > c.reconEst * 1.2 ? " — over the announced estimate." : "."}`);
-  };
-
-  // ----- DEAL FLOW -----
-  const startDeal = (lead, price) => {
-    const car = lot.find((c) => c.id === lead.carId);
-    if (!car) return;
-    if (lead.trade && lot.length >= lotCap) return addLog("No capacity for the trade vehicle. Free a spot or decline.");
-    // bank approval for finance buyers
-    if (lead.payType === "finance") {
-      const declineP = lead.credit === "subprime" ? 0.22 : lead.credit === "near-prime" ? 0.08 : 0.02;
-      if (Math.random() < declineP) {
-        setLeads((ls) => ls.filter((l) => l.id !== lead.id));
-        return addLog(`${lead.buyer} was declined by the lender (${lead.credit}). Deal terminated.`);
-      }
-    }
-    const reserve = lead.payType === "finance"
-      ? Math.round((lead.credit === "subprime" ? rnd(800, 1300) : lead.credit === "near-prime" ? rnd(500, 900) : rnd(250, 550)) / 50) * 50
-      : 0;
-    let terms = null;
-    if (lead.payType === "finance") {
-      const apr = lead.credit === "prime" ? rnd(6.9, 9.4) : lead.credit === "near-prime" ? rnd(11.5, 14.9) : rnd(17.9, 22.9);
-      const months = lead.credit === "subprime" ? 60 : 72;
-      const downPct = lead.credit === "prime" ? rnd(0.1, 0.25) : lead.credit === "near-prime" ? rnd(0.05, 0.15) : rnd(0, 0.08);
-      const down = Math.round((price * downPct) / 100) * 100;
-      terms = { apr: Math.round(apr * 10) / 10, months, down };
-    }
-    setDeal({ lead, car, price, reserve, back: reserve, results: {}, terms });
-    setLeads((ls) => ls.filter((l) => l.id !== lead.id));
-  };
-
-  const pitch = (key) => {
-    setDeal((d) => {
-      if (!d || d.results[key]) return d;
-      const p = PRODUCTS.find((x) => x.key === key);
-      const isFin = d.lead.payType === "finance";
-      let take =
-        key === "vsc" ? (isFin ? 0.5 : 0.25) + (d.car.miles > 80000 ? 0.15 : 0)
-        : key === "gap" ? (d.lead.credit === "subprime" ? 0.6 : 0.45)
-        : key === "tw" ? 0.3
-        : 0.25;
-      const sold = Math.random() < take;
-      return {
-        ...d,
-        results: { ...d.results, [key]: sold ? "sold" : "declined" },
-        back: sold ? d.back + (p.price - p.cost) : d.back,
-      };
-    });
-  };
-
-  const fundDeal = () => {
-    const d = deal;
-    if (!d) return;
-    const { lead, car, price } = d;
-    const productRevenue = PRODUCTS.reduce((s, p) => s + (d.results[p.key] === "sold" ? p.price : 0), 0);
-    let cashIn = price + productRevenue + d.reserve;
-    let newLot = lot.filter((c) => c.id !== car.id);
-    let note = `Deal funded: ${lead.buyer}, ${car.name}, ${fmt(price)} (${lead.payType}). Front ${fmt(price - car.cost)}, back ${fmt(d.back)}.`;
-    if (lead.trade) {
-      cashIn -= lead.trade.wants;
-      const reconDays = lead.trade.light === "green" ? 0 : lead.trade.light === "yellow" ? 1 : 2;
-      newLot = [...newLot, {
-        ...lead.trade, cost: lead.trade.wants,
-        status: reconDays === 0 ? "frontline" : "recon", reconDays,
-        askPrice: Math.round((lead.trade.retail * 1.02) / 100) * 100, daysOnLot: 0,
-      }];
-      note += ` Trade acquired: ${lead.trade.name} at ${fmt(lead.trade.wants)} ACV.`;
-    }
-    setCash((v) => v + cashIn);
-    setLot(newLot);
-    setStats((s) => ({ ...s, sold: s.sold + 1, front: s.front + (price - car.cost), back: s.back + d.back }));
-    setDeal(null);
-    addLog(note);
-  };
-
-  const counter = (lead) => {
-    const car = lot.find((c) => c.id === lead.carId);
-    const mid = Math.round(((lead.offer + car.askPrice) / 2) / 100) * 100;
-    if (Math.random() < 0.55) {
-      startDeal(lead, mid);
-    } else if (Math.random() < 0.5) {
-      setLeads((ls) => ls.map((l) => (l.id === lead.id ? { ...l, countered: true } : l)));
-      addLog(`${lead.buyer} declined the counter and is holding at ${fmt(lead.offer)} on the ${car.name}.`);
-    } else {
-      setLeads((ls) => ls.filter((l) => l.id !== lead.id));
-      addLog(`${lead.buyer} rejected the counter and left. ${car.name} remains in inventory.`);
-    }
-  };
-
-  // ----- ADVANCE DAY -----
-  const nextDay = () => {
-    const interest = Math.round(loan * (LINE_APR / 365));
-    const overhead = 400 + lot.length * 15 + (marketing ? 300 : 0) + interest;
-    const newCash = cash - overhead;
-    const newLot = lot.map((c) => {
-      if (c.status === "recon" && c.reconPaid) {
-        const dd = c.reconDays - 1;
-        return dd <= 0 ? { ...c, status: "frontline", reconDays: 0 } : { ...c, reconDays: dd };
-      }
-      if (c.status === "frontline") return { ...c, daysOnLot: c.daysOnLot + 1 };
-      return c;
-    });
-    const newLeads = genLeads(newLot, marketing);
-    setDay((d) => d + 1);
-    setCash(newCash);
-    setLot(newLot);
-    setLeads(newLeads);
-    setAuction(genAuctionLot(lotCap));
-    addLog(`Day ${day + 1} — overhead ${fmt(overhead)}${interest > 0 ? ` (incl ${fmt(interest)} interest)` : ""}. ${newLeads.length ? newLeads.length + " customer" + (newLeads.length > 1 ? "s" : "") + " on the lot." : "No customer traffic."}`);
-    if (newCash < 0) {
-      if (credit <= 0) setDead(true);
-      else addLog("ACCOUNT OVERDRAWN — draw on the credit line to continue operations.");
-    }
-    if (newLeads.length) setTab("leads");
-  };
-
-  const expand = () => {
-    const next = CAPS[CAPS.indexOf(lotCap) + 1];
-    const cost = CAP_COST[next];
-    if (cash < cost) return addLog("Insufficient funds for expansion.");
-    setCash((v) => v - cost);
-    setLotCap(next);
-    addLog(`Lot expanded to ${next} units. Credit limit increased to ${fmt(LOAN_CAP[next])}. Auction run list enlarged.`);
-  };
-
-  // ---------- UI ----------
-  const Light = ({ c }) => (
-    <span style={{
-      display: "inline-block", width: 10, height: 10, borderRadius: "50%",
-      background: c === "green" ? "#3BD16F" : c === "yellow" ? "#FFC42E" : "#FF5A48",
-      boxShadow: `0 0 6px ${c === "green" ? "#3BD16F88" : c === "yellow" ? "#FFC42E88" : "#FF5A4888"}`,
-      marginRight: 6, verticalAlign: "middle",
-    }} />
-  );
-  const Tag = ({ children, size = 22 }) => (
-    <span style={{ fontFamily: "'Inter', sans-serif", fontWeight: 800, fontSize: size - 3, color: "#EDF1F7", letterSpacing: -0.3, fontVariantNumeric: "tabular-nums" }}>{children}</span>
-  );
-  const Book = ({ car }) => (
-    <div style={{ display: "flex", gap: 0, marginTop: 6, borderRadius: 7, overflow: "hidden", border: "1px solid #232A36" }}>
-      {[["MMR", car.mmr], ["Trade", car.tradeVal], ["Retail", car.retail]].map(([k, v], i) => (
-        <div key={k} style={{ flex: 1, textAlign: "center", padding: "5px 2px", background: i === 0 ? "#10141B" : i === 1 ? "#12161D" : "#0E1116", borderLeft: i ? "1px solid #232A36" : "none" }}>
-          <div style={{ fontSize: 10, color: "#8E939B", letterSpacing: 0.5, textTransform: "uppercase" }}>{k}</div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: i === 0 ? "#3B7BFF" : "#EDF1F7" }}>{fmt(v)}</div>
-        </div>
-      ))}
-    </div>
-  );
-
-  const card = { background: "#151A22", border: "1px solid #232A36", borderRadius: 10, padding: "12px 14px", marginBottom: 10 };
-  const btn = (bg = "#3B7BFF", fg = "#FFFFFF") => ({
-    background: bg, color: fg, border: "none", borderRadius: 7,
-    padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer",
-    fontFamily: "'Inter', sans-serif", letterSpacing: 0.3,
-  });
-  const ghost = { ...btn("transparent", "#B9BDC4"), border: "1px solid #2C3442" };
-  const sub = { color: "#8E939B", fontSize: 12 };
-  const creditChip = (c) => ({
-    fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
-    background: c === "prime" ? "#153D26" : c === "near-prime" ? "#3D3115" : "#3D1A15",
-    color: c === "prime" ? "#3BD16F" : c === "near-prime" ? "#FFC42E" : "#FF5A48",
-  });
-
-  if (!booted) {
-    return (
-      <div style={wrap}>
-        <FontLink />
-        <div style={{ textAlign: "center", paddingTop: 120, color: "#8E939B", fontSize: 13 }}>Loading…</div>
-      </div>
-    );
-  }
-
-  if (dead) {
-    return (
-      <div style={wrap}>
-        <FontLink />
-        <div style={{ textAlign: "center", paddingTop: 100 }}>
-          <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 800, fontSize: 32, letterSpacing: 1, color: "#FF5A48" }}>OUT OF BUSINESS</div>
-          <p style={{ color: "#B9BDC4", marginTop: 16 }}>
-            Operations ceased on day {day}. {stats.sold} units sold, {fmt(stats.front + stats.back)} total gross, {fmt(stats.sold ? (stats.front + stats.back) / stats.sold : 0)} PVR.
-          </p>
-          <button style={{ ...btn(), marginTop: 20 }} onClick={newGame}>Restart</button>
-        </div>
-      </div>
-    );
-  }
-
-  // ----- F&I DESK OVERLAY -----
-  if (deal) {
-    const { lead, car, price, terms } = deal;
-    const totalGross = (price - car.cost) + deal.back;
-    const soldProducts = PRODUCTS.reduce((s, p) => s + (deal.results[p.key] === "sold" ? p.price : 0), 0);
-    const financed = terms ? Math.max(0, price - terms.down + soldProducts) : 0;
-    const payment = terms ? pmt(financed, terms.apr, terms.months) : 0;
-    return (
-      <div style={wrap}>
-        <FontLink />
-        <div style={{ paddingTop: 18 }}>
-          <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: 2, color: "#3B7BFF" }}>F&I DESK</div>
-          <div style={{ ...card, marginTop: 12 }}>
-            <div style={{ fontWeight: 700, color: "#EDF1F7", fontSize: 15 }}>{lead.buyer} · {car.name}</div>
-            <div style={{ marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={sub}>Selling at {fmt(price)} · front {fmt(price - car.cost)}</span>
-              {lead.payType === "finance"
-                ? <span style={creditChip(lead.credit)}>{lead.credit.toUpperCase()} · APPROVED</span>
-                : <span style={{ ...creditChip("prime"), background: "#26282C", color: "#B9BDC4" }}>CASH BUYER</span>}
-            </div>
-            {deal.reserve > 0 && <div style={{ ...sub, marginTop: 6, color: "#3BD16F" }}>Lender reserve: +{fmt(deal.reserve)}</div>}
-          </div>
-
-          {terms && (
-            <div style={{ ...card, background: "#10141B", border: "1px solid #1E3A6E" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "#8E939B", letterSpacing: 0.5, textTransform: "uppercase" }}>Monthly payment</div>
-                  <div style={{ fontWeight: 800, fontSize: 26, color: "#EDF1F7" }}>{fmt(payment)}<span style={{ fontSize: 13, fontWeight: 600, color: "#8E939B" }}>/mo</span></div>
-                </div>
-                <div style={{ textAlign: "right", fontSize: 12, color: "#B9BDC4", lineHeight: 1.6 }}>
-                  <div>{terms.apr}% APR · {terms.months} mo</div>
-                  <div>{fmt(terms.down)} down</div>
-                  <div>{fmt(financed)} financed</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div style={{ ...sub, margin: "4px 0 8px" }}>Product menu — each product may be presented once.</div>
-          {PRODUCTS.map((p) => {
-            if (p.financeOnly && lead.payType !== "finance") return null;
-            const res = deal.results[p.key];
-            const bump = terms ? pmt(p.price, terms.apr, terms.months) : 0;
-            return (
-              <div key={p.key} style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>{p.name}</div>
-                  <div style={sub}>{fmt(p.price)}{terms ? ` · +$${Math.round(bump)}/mo` : " to buyer"} · {fmt(p.price - p.cost)} profit</div>
-                </div>
-                {res ? (
-                  <span style={{ fontWeight: 800, fontSize: 13, color: res === "sold" ? "#3BD16F" : "#FF5A48" }}>
-                    {res === "sold" ? "SOLD" : "DECLINED"}
-                  </span>
-                ) : (
-                  <button style={btn("#1C222C", "#EDF1F7")} onClick={() => pitch(p.key)}>Pitch</button>
-                )}
-              </div>
-            );
-          })}
-
-          <div style={{ ...card, background: "#10141B" }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#B9BDC4", fontSize: 14 }}>Deal total</span>
-              <Tag size={20}>{fmt(totalGross)} gross</Tag>
-            </div>
-            <div style={{ ...sub, marginTop: 2 }}>Front {fmt(price - car.cost)} + back {fmt(deal.back)}</div>
-          </div>
-
-          <button style={{ ...btn("#3BD16F", "#0E1116"), width: "100%", padding: "14px 0", fontSize: 15 }} onClick={fundDeal}>
-            {lead.payType === "finance" ? "Fund deal" : "Complete sale"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const pvr = stats.sold ? (stats.front + stats.back) / stats.sold : 0;
-  const nextCap = CAPS[CAPS.indexOf(lotCap) + 1];
-
-  return (
-    <div style={wrap}>
-      <FontLink />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "14px 4px 10px" }}>
-        <div>
-          <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: 1.5, color: "#EDF1F7", lineHeight: 1 }}>USED CAR DEALER <span style={{ color: "#3B7BFF" }}>SIM</span></div>
-          <div style={{ ...sub, marginTop: 2 }}>Day {day} · {lot.length}/{lotCap} units · Net {fmt(netWorth)}</div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 800, fontSize: 22, color: cash < 5000 ? "#FF5A48" : "#EDF1F7" }}>{fmt(cash)}</div>
-          <div style={sub}>cash{loan > 0 ? ` · owe ${fmt(loan)}` : ""}</div>
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 8 }}>
-        <button style={{ ...ghost, padding: "4px 10px", fontSize: 11 }} onClick={() => setShowHelp(!showHelp)}>
-          {showHelp ? "HIDE" : "HOW IT WORKS"}
-        </button>
-        {showHelp && (
-          <div style={{ ...card, marginTop: 8, fontSize: 13, color: "#B9BDC4", lineHeight: 1.5 }}>
-            Acquire inventory at daily auction, complete reconditioning, and retail each unit against market value. Approximately 60% of customers finance; approved deals proceed to the F&I office, where product sales and lender reserve determine backend gross. The credit line carries 12% APR billed daily, with limits tied to lot capacity. Daily operating costs apply regardless of sales volume. Operations cease if the account is overdrawn with no available credit.
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        {[["lot", "Lot"], ["auction", "Auction"], ["leads", `Buyers${leads.length ? " · " + leads.length : ""}`], ["office", "Office"]].map(([k, label]) => (
-          <button key={k} onClick={() => setTab(k)} style={{
-            ...btn(tab === k ? "#3B7BFF" : "#1C222C", tab === k ? "#0E1116" : "#B9BDC4"),
-            flex: 1, padding: "9px 4px",
-          }}>{label}</button>
-        ))}
-      </div>
-
-      {/* ---- LOT ---- */}
-      {tab === "lot" && (
-        <div>
-          {lot.length === 0 && <div style={{ ...card, ...sub }}>No inventory. Acquire vehicles at auction.</div>}
-          {lot.map((c) => (
-            <div key={c.id} style={card}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <div style={{ fontWeight: 700, color: "#EDF1F7", fontSize: 15 }}><Light c={c.light} />{c.name}</div>
-                  <div style={sub}>{c.miles.toLocaleString()} mi · cost {fmt(c.cost)} · retail ~{fmt(c.retail)}</div>
-                </div>
-                {c.status === "frontline" && <Tag>{fmt(c.askPrice)}</Tag>}
-              </div>
-              {c.status === "recon" && !c.reconPaid && (
-                <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: "#FFC42E", fontSize: 13 }}>Reconditioning required — {fmt(c.reconActual)}</span>
-                  <button style={btn("#FFC42E", "#0E1116")} onClick={() => startRecon(c.id)}>Approve recon</button>
-                </div>
-              )}
-              {c.status === "recon" && c.reconPaid && (
-                <div style={{ marginTop: 8, color: "#8E939B", fontSize: 13 }}>In reconditioning — {c.reconDays} day{c.reconDays > 1 ? "s" : ""} remaining</div>
-              )}
-              {c.status === "frontline" && (
-                <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={sub}>{c.daysOnLot} days in stock{c.daysOnLot > 30 ? " · AGED" : ""}</span>
-                  <span style={{ flex: 1 }} />
-                  {editPrice?.id === c.id ? (
-                    <>
-                      <input type="number" value={editPrice.val}
-                        onChange={(e) => setEditPrice({ id: c.id, val: e.target.value })}
-                        style={{ width: 90, background: "#0E1116", color: "#EDF1F7", border: "1px solid #2C3442", borderRadius: 6, padding: "6px 8px", fontSize: 13 }} />
-                      <button style={btn()} onClick={() => {
-                        const v = Math.max(500, Math.round(Number(editPrice.val) / 100) * 100);
-                        setLot((l) => l.map((x) => x.id === c.id ? { ...x, askPrice: v } : x));
-                        setEditPrice(null);
-                      }}>Set</button>
-                    </>
-                  ) : (
-                    <button style={ghost} onClick={() => setEditPrice({ id: c.id, val: c.askPrice })}>Reprice</button>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ---- AUCTION ---- */}
-      {tab === "auction" && (
-        <div>
-          <div style={{ ...sub, marginBottom: 8 }}>Daily run list · {auction.length} units · $350 buyer fee · $250 increments</div>
-          {auction.map((c) => (
-            <div key={c.id} style={{ ...card, opacity: c.closed ? 0.45 : 1 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ fontWeight: 700, color: "#EDF1F7", fontSize: 15 }}><Light c={c.light} />{c.name}</div>
-                  <div style={sub}>{c.miles.toLocaleString()} mi · recon est {fmt(c.reconEst)}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <Tag>{fmt(c.currentBid)}</Tag>
-                  <div style={{ fontSize: 11, color: c.leader === "you" ? "#3BD16F" : "#FF5A48" }}>
-                    {c.closed ? "PURCHASED" : c.leader === "you" ? "you are high" : "competitor high"}
-                  </div>
-                </div>
-              </div>
-              <Book car={c} />
-              {!c.closed && (
-                <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                  <button style={btn("#1C222C", "#EDF1F7")} onClick={() => bid(c.id)}>Bid {fmt(c.currentBid + 250)}</button>
-                  {c.leader === "you" && <button style={btn("#3BD16F", "#0E1116")} onClick={() => hammer(c.id)}>Buy at bid</button>}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ---- LEADS ---- */}
-      {tab === "leads" && (
-        <div>
-          {leads.length === 0 && <div style={{ ...card, ...sub }}>No active customers. Advance the day to generate traffic — competitive pricing increases lead volume.</div>}
-          {leads.map((l) => {
-            const car = lot.find((c) => c.id === l.carId);
-            if (!car) return null;
-            const mid = Math.round(((l.offer + car.askPrice) / 2) / 100) * 100;
-            return (
-              <div key={l.id} style={card}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ fontWeight: 700, color: "#EDF1F7", fontSize: 15 }}>{l.buyer} · {car.name}</div>
-                  {l.payType === "finance"
-                    ? <span style={creditChip(l.credit)}>{l.credit.toUpperCase()}</span>
-                    : <span style={{ ...creditChip("prime"), background: "#26282C", color: "#B9BDC4" }}>CASH</span>}
-                </div>
-                <div style={{ ...sub, marginTop: 2 }}>Asking {fmt(car.askPrice)} · your cost {fmt(car.cost)}</div>
-                <div style={{ marginTop: 6, fontSize: 14, color: "#EDF1F7" }}>
-                  Offer: <Tag>{fmt(l.offer)}</Tag>
-                  <span style={{ ...sub, marginLeft: 8 }}>({fmt(l.offer - car.cost)} front)</span>
-                </div>
-                {l.trade && (
-                  <div style={{ marginTop: 6, padding: "8px 10px", background: "#10141B", borderRadius: 7, fontSize: 13, color: "#B9BDC4" }}>
-                    Trade-in: <Light c={l.trade.light} />{l.trade.name}, {l.trade.miles.toLocaleString()} mi — requesting {fmt(l.trade.wants)} ACV
-                    <Book car={l.trade} />
-                    <div style={{ ...sub, marginTop: 4 }}>Reconditioning costs assessed after acquisition</div>
-                  </div>
-                )}
-                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button style={btn("#3BD16F", "#0E1116")} onClick={() => startDeal(l, l.offer)}>Accept offer</button>
-                  {!l.countered && <button style={btn()} onClick={() => counter(l)}>Counter {fmt(mid)}</button>}
-                  <button style={ghost} onClick={() => { setLeads((ls) => ls.filter((x) => x.id !== l.id)); addLog(`Offer from ${l.buyer} declined.`); }}>Decline</button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ---- OFFICE ---- */}
-      {tab === "office" && (
-        <div>
-          <div style={card}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, textAlign: "center" }}>
-              {[["Sold", stats.sold], ["Front", fmt(stats.front)], ["Back", fmt(stats.back)], ["PVR", stats.sold ? fmt(pvr) : "—"]].map(([k, v]) => (
-                <div key={k}>
-                  <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 800, fontSize: 16, color: k === "Back" ? "#3B7BFF" : "#EDF1F7" }}>{v}</div>
-                  <div style={sub}>{k}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Credit line</div>
-              <div style={sub}>{fmt(loan)} owed of {fmt(loanCap)} limit</div>
-            </div>
-            <div style={{ height: 6, background: "#10141B", borderRadius: 3, margin: "8px 0 10px", overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${Math.min(100, (loan / loanCap) * 100)}%`, background: loan / loanCap > 0.8 ? "#FF5A48" : "#3B7BFF", borderRadius: 3 }} />
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button style={btn("#1C222C", "#EDF1F7")} onClick={() => draw(10000)} disabled={credit <= 0}>Draw $10k</button>
-              <button style={btn("#1C222C", "#EDF1F7")} onClick={() => draw(25000)} disabled={credit <= 0}>Draw $25k</button>
-              <button style={ghost} onClick={() => repay(10000)} disabled={loan <= 0 || cash <= 0}>Repay $10k</button>
-              <button style={ghost} onClick={() => repay(loan)} disabled={loan <= 0 || cash <= 0}>Repay all</button>
-            </div>
-            <div style={{ ...sub, marginTop: 8 }}>12% APR simple interest, billed daily{loan > 0 ? ` · current cost ${fmt(Math.round(loan * (LINE_APR / 365)))}/day` : ""}. Limit scales with lot capacity.</div>
-          </div>
-          <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Marketing</div>
-                <div style={sub}>$300/day · increases customer traffic</div>
-              </div>
-              <button style={btn(marketing ? "#3BD16F" : "#1C222C", marketing ? "#0E1116" : "#B9BDC4")} onClick={() => setMarketing(!marketing)}>
-                {marketing ? "Running" : "Off"}
-              </button>
-            </div>
-          </div>
-          {nextCap && (
-            <div style={card}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Expand the lot</div>
-                  <div style={sub}>{nextCap} spots for {fmt(CAP_COST[nextCap])} · expanded auction run list</div>
-                </div>
-                <button style={btn()} onClick={expand}>Expand</button>
-              </div>
-            </div>
-          )}
-          <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Save data</div>
-                <div style={sub}>Progress saves automatically each move</div>
-              </div>
-              <button style={{ ...ghost, color: "#FF5A48", borderColor: "#3D1A15" }} onClick={() => { if (window.confirm("Erase all progress and start a new game?")) newGame(); }}>New game</button>
-            </div>
-          </div>
-          <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Save data</div>
-                <div style={sub}>Progress saves automatically to this device</div>
-              </div>
-              <button style={ghost} onClick={() => { if (window.confirm("Start a new dealership? Current progress will be erased.")) newGame(); }}>New game</button>
-            </div>
-          </div>
-          <div style={{ ...card, maxHeight: 260, overflowY: "auto" }}>
-            <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14, marginBottom: 6 }}>Log</div>
-            {log.map((m, i) => (
-              <div key={i} style={{ ...sub, padding: "4px 0", borderBottom: i < log.length - 1 ? "1px solid #1C222C" : "none" }}>{m}</div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ position: "sticky", bottom: 0, paddingTop: 10, paddingBottom: 14, background: "linear-gradient(transparent, #0E1116 30%)" }}>
-        <button onClick={nextDay} style={{
-          ...btn("#3B7BFF"), width: "100%", padding: "14px 0", fontSize: 15,
-          boxShadow: "0 -4px 20px #00000066",
-        }}>
-          End day {day} → (overhead {fmt(400 + lot.length * 15 + (marketing ? 300 : 0) + Math.round(loan * (LINE_APR / 365)))})
-        </button>
-      </div>
-    </div>
-  );
-}
-
-const wrap = {
-  minHeight: "100vh", background: "#0E1116", padding: "0 14px",
-  maxWidth: 560, margin: "0 auto", fontFamily: "'Inter', system-ui, sans-serif",
-};
-
-function FontLink() {
-  return (
-    <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-      body { background: #0E1116; margin: 0; }
-      * { font-variant-numeric: tabular-nums; }
-      button { transition: opacity 0.12s ease; }
-      button:active { transform: scale(0.98); opacity: 0.85; }
-      input { font-family: 'Inter', sans-serif; }
-      *::-webkit-scrollbar { width: 6px; }
-      *::-webkit-scrollbar-thumb { background: #232A36; border-radius: 3px; }
-    `}</style>
-  );
-}
-
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-
-</script>
+</div>
 </body>
 </html>
