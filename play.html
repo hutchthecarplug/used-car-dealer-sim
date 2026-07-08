@@ -37,10 +37,28 @@ const MODELS = [
   { name: "Lexus ES 350", tier: 2, base: 29000 },
   { name: "Audi A4", tier: 2, base: 25500 },
   { name: "Mercedes S550", tier: 2, base: 46000 },
+  { name: "Mercedes E350", tier: 2, base: 33000 },
+  { name: "Mercedes GLE 350", tier: 2, base: 45000 },
+  { name: "BMW 540i", tier: 2, base: 36000 },
+  { name: "BMW X5", tier: 2, base: 44000 },
+  { name: "BMW M3", tier: 2, base: 52000 },
+  { name: "Porsche Macan", tier: 2, base: 42000 },
+  { name: "Porsche Cayenne", tier: 2, base: 52000 },
+  { name: "Range Rover Sport", tier: 2, base: 48000 },
+  { name: "Lexus RX 350", tier: 2, base: 34000 },
+  { name: "Audi Q5", tier: 2, base: 30000 },
+  { name: "Genesis G80", tier: 2, base: 35000 },
 ];
 const BUYERS = ["Marcus", "Danielle", "Tony", "Priya", "Jamal", "Kelsey", "Omar", "Rich", "Gloria", "Steve", "Fatima", "Dre", "Linda", "Hector", "Yusuf"];
 const CAPS = [10, 30, 50, 100];
 const CAP_COST = { 30: 25000, 50: 60000, 100: 150000 };
+const MKT = [
+  { name: "None", cost: 0, lead: 0, offer: 0 },
+  { name: "Local classifieds", cost: 150, lead: 0.08, offer: 0 },
+  { name: "Paid listings", cost: 400, lead: 0.18, offer: 0.01 },
+  { name: "Premium campaign", cost: 900, lead: 0.3, offer: 0.025 },
+];
+
 const LOAN_CAP = { 10: 100000, 30: 300000, 50: 500000, 100: 1000000 };
 const LINE_APR = 0.12; // simple interest on the credit line, billed daily
 const pmt = (amount, apr, months) => {
@@ -115,16 +133,16 @@ function genAuctionLot(cap) {
   });
 }
 
-function genLeads(lot, marketing) {
+function genLeads(lot, mkt) {
   const leads = [];
   lot.filter((c) => c.status === "frontline").forEach((c) => {
     const ratio = c.askPrice / c.retail;
     let p = 0.75 - (ratio - 0.9) * 2.2;
-    p += marketing ? 0.15 : 0;
+    p += MKT[mkt].lead;
     p *= Math.max(0.45, 1 - c.daysOnLot / 70);
     p = Math.max(0.04, Math.min(0.85, p));
     if (Math.random() < p) {
-      const offer = Math.round((c.askPrice * rnd(0.87, 0.97)) / 100) * 100;
+      const offer = Math.round((c.askPrice * rnd(0.87 + MKT[mkt].offer, 0.97 + MKT[mkt].offer)) / 100) * 100;
       // realistic independent-store mix: ~60% finance / 40% cash
       const payType = Math.random() < 0.6 ? "finance" : "cash";
       const r = Math.random();
@@ -157,7 +175,7 @@ function App() {
   const [auction, setAuction] = useState(() => genAuctionLot(10));
   const [leads, setLeads] = useState([]);
   const [log, setLog] = useState(["Day 1 — Operations commenced. Opening balance $10,000. 2 units in inventory."]);
-  const [marketing, setMarketing] = useState(false);
+  const [marketing, setMarketing] = useState(0);
   const [stats, setStats] = useState({ sold: 0, front: 0, back: 0, bought: 0 });
   const [editPrice, setEditPrice] = useState(null);
   const [deal, setDeal] = useState(null); // F&I desk state
@@ -175,7 +193,7 @@ function App() {
           const d = JSON.parse(raw);
           setDay(d.day); setCash(d.cash); setLoan(d.loan); setLot(d.lot);
           setLotCap(d.lotCap); setAuction(d.auction); setLeads(d.leads);
-          setMarketing(d.marketing); setStats(d.stats); setLog(d.log);
+          setMarketing(typeof d.marketing === "boolean" ? (d.marketing ? 2 : 0) : (d.marketing ?? 0)); setStats(d.stats); setLog(d.log);
           if (d.uid) UID = d.uid;
         } catch { /* corrupted save — start fresh */ }
       }
@@ -351,7 +369,7 @@ function App() {
   // ----- ADVANCE DAY -----
   const nextDay = () => {
     const interest = Math.round(loan * (LINE_APR / 365));
-    const overhead = 400 + lot.length * 15 + (marketing ? 300 : 0) + interest;
+    const overhead = 400 + lot.length * 15 + MKT[marketing].cost + interest;
     const newCash = cash - overhead;
     const newLot = lot.map((c) => {
       if (c.status === "recon" && c.reconPaid) {
@@ -708,11 +726,21 @@ function App() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Marketing</div>
-                <div style={sub}>$300/day · increases customer traffic</div>
+                <div style={sub}>{marketing === 0 ? "No active spend" : `${fmt(MKT[marketing].cost)}/day · ${MKT[marketing].name}`}</div>
               </div>
-              <button style={btn(marketing ? "#3BD16F" : "#1C222C", marketing ? "#0E1116" : "#B9BDC4")} onClick={() => setMarketing(!marketing)}>
-                {marketing ? "Running" : "Off"}
-              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
+              {MKT.map((t, i) => (
+                <button key={t.name} onClick={() => setMarketing(i)} style={{
+                  ...btn(marketing === i ? "#3B7BFF" : "#1C222C", marketing === i ? "#FFFFFF" : "#B9BDC4"),
+                  padding: "10px 6px", textAlign: "left",
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{t.name}</div>
+                  <div style={{ fontSize: 11, fontWeight: 400, opacity: 0.75, marginTop: 2 }}>
+                    {t.cost === 0 ? "$0/day" : `${fmt(t.cost)}/day · +traffic${t.offer ? " · stronger offers" : ""}`}
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
           {nextCap && (
@@ -730,18 +758,9 @@ function App() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Save data</div>
-                <div style={sub}>Progress saves automatically each move</div>
-              </div>
-              <button style={{ ...ghost, color: "#FF5A48", borderColor: "#3D1A15" }} onClick={() => { if (window.confirm("Erase all progress and start a new game?")) newGame(); }}>New game</button>
-            </div>
-          </div>
-          <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Save data</div>
                 <div style={sub}>Progress saves automatically to this device</div>
               </div>
-              <button style={ghost} onClick={() => { if (window.confirm("Start a new dealership? Current progress will be erased.")) newGame(); }}>New game</button>
+              <button style={{ ...ghost, color: "#FF5A48", borderColor: "#3D1A15" }} onClick={() => { if (window.confirm("Erase all progress and start a new game?")) newGame(); }}>New game</button>
             </div>
           </div>
           <div style={{ textAlign: "center", padding: "6px 0 2px", color: "#5C636E", fontSize: 11, letterSpacing: 0.5 }}>
@@ -761,7 +780,7 @@ function App() {
           ...btn("#3B7BFF"), width: "100%", padding: "14px 0", fontSize: 15,
           boxShadow: "0 -4px 20px #00000066",
         }}>
-          End day {day} → (overhead {fmt(400 + lot.length * 15 + (marketing ? 300 : 0) + Math.round(loan * (LINE_APR / 365)))})
+          End day {day} → (overhead {fmt(400 + lot.length * 15 + MKT[marketing].cost + Math.round(loan * (LINE_APR / 365)))})
         </button>
       </div>
     </div>
