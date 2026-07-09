@@ -4,130 +4,177 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Used Car Dealer Sim — Dealership Operations Simulator</title>
-<meta name="description" content="A browser-based used car dealership simulator. Buy at auction against MMR, manage reconditioning, price inventory, and run the F&I office. Free, no download, progress saves to your device.">
-<meta name="theme-color" content="#0E1116">
+<meta name="description" content="A browser-based used car dealership simulator. Buy at auction against MMR, manage reconditioning, negotiate with live customer sentiment, and run the F&I office. Free, no download, progress saves to your device.">
+<meta name="theme-color" content="#000000">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
 :root{
-  --bg:#0E1116; --card:#151A22; --line:#232A36; --ink:#EDF1F7;
-  --mut:#8E939B; --dim:#5C636E; --blu:#3B7BFF; --grn:#3BD16F; --yel:#FFC42E; --red:#FF5A48;
+  --bg:#000000; --card:#0F1216; --line:#232A36; --ink:#EDF1F7;
+  --body:#B7BEC9; --mut:#8E939B; --dim:#5C636E; --blu:#3B7BFF;
+  --grn:#3BD16F; --yel:#FFC42E; --red:#FF5A48;
 }
-*{box-sizing:border-box;font-variant-numeric:tabular-nums}
-html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;line-height:1.6}
-.wrap{max-width:680px;margin:0 auto;padding:0 20px}
+*{box-sizing:border-box;font-variant-numeric:tabular-nums;margin:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;
+  line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:660px;margin:0 auto;padding:0 22px}
 a{color:var(--blu);text-decoration:none}
-a:focus-visible,button:focus-visible{outline:2px solid var(--blu);outline-offset:2px}
+a:focus-visible{outline:2px solid var(--blu);outline-offset:2px}
 
-/* masthead */
-header{padding:56px 0 40px;border-bottom:1px solid var(--line)}
-.lights{display:flex;gap:7px;margin-bottom:18px}
-.lights span{width:9px;height:9px;border-radius:50%}
-.lights .g{background:var(--grn);box-shadow:0 0 7px #3BD16F88}
-.lights .y{background:var(--yel);box-shadow:0 0 7px #FFC42E88}
-.lights .r{background:var(--red);box-shadow:0 0 7px #FF5A4888}
-h1{font-size:26px;font-weight:800;letter-spacing:1.5px;margin:0;line-height:1.2}
-h1 em{font-style:normal;color:var(--blu)}
-.tagline{color:var(--mut);font-size:15px;margin:10px 0 26px;max-width:46ch}
-.play{display:inline-block;background:var(--blu);color:#fff;font-weight:700;font-size:15px;
-  padding:13px 34px;border-radius:8px;letter-spacing:.3px}
-.play:active{transform:scale(.98);opacity:.85}
-.meta{color:var(--dim);font-size:12px;margin-top:12px;letter-spacing:.3px}
+/* top bar */
+nav{border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:58px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:13px;letter-spacing:.4px;color:var(--ink)}
+.brand .dots{display:flex;gap:4px}
+.brand .dots span{width:7px;height:7px;border-radius:50%}
+.brand .dots .g{background:var(--grn)} .brand .dots .y{background:var(--yel)} .brand .dots .r{background:var(--red)}
+.navplay{background:var(--blu);color:#fff;font-weight:700;font-size:13px;padding:8px 18px;border-radius:7px}
+.navplay:active{transform:scale(.98)}
 
-/* spec strip */
-.strip{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:34px 0 0}
-.strip div{flex:1;text-align:center;padding:11px 4px;border-left:1px solid var(--line)}
-.strip div:first-child{border-left:none;background:#10141B}
-.strip b{display:block;font-size:15px;font-weight:800}
-.strip small{color:var(--mut);font-size:10px;letter-spacing:.6px;text-transform:uppercase}
+/* hero */
+.hero{padding:64px 0 48px}
+h1{font-size:31px;font-weight:800;letter-spacing:-0.6px;line-height:1.18;max-width:19ch}
+h1 span{color:var(--blu)}
+.tagline{color:var(--body);font-size:16px;margin:14px 0 28px;max-width:48ch}
+.cta{display:inline-block;background:var(--blu);color:#fff;font-weight:700;font-size:15px;
+  padding:13px 36px;border-radius:8px}
+.cta:active{transform:scale(.98)}
+.meta{color:var(--dim);font-size:12.5px;margin-top:14px}
+.strip{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-top:40px}
+.strip div{flex:1;text-align:center;padding:12px 4px;border-left:1px solid var(--line)}
+.strip div:first-child{border-left:none}
+.strip b{display:block;font-size:16px;font-weight:800;letter-spacing:-0.3px}
+.strip small{color:var(--mut);font-size:10.5px;letter-spacing:.4px;text-transform:uppercase}
 
 /* sections */
-section{padding:36px 0;border-bottom:1px solid var(--line)}
-.kicker{color:var(--blu);font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin:0 0 14px}
-h2{font-size:18px;font-weight:800;margin:0 0 12px;letter-spacing:.2px}
-p{color:#C4CAD3;font-size:14.5px;margin:0 0 14px}
-p:last-child{margin-bottom:0}
+section{padding:44px 0 0}
+section:last-of-type{padding-bottom:44px}
+.kicker{color:var(--dim);font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;margin-bottom:6px}
+.stitle{font-size:22px;font-weight:800;letter-spacing:-0.4px;margin-bottom:16px}
+h3{font-size:15.5px;font-weight:700;letter-spacing:-0.2px;margin:22px 0 6px}
+p{color:var(--body);font-size:15px;margin-bottom:14px}
+section > p:last-child{margin-bottom:0}
 
-/* systems table */
-.sys{border:1px solid var(--line);border-radius:9px;overflow:hidden}
-.sys .row{display:flex;gap:14px;padding:14px 16px;border-top:1px solid var(--line);background:var(--card)}
-.sys .row:first-child{border-top:none}
-.sys .k{flex:0 0 118px;font-weight:700;font-size:13px;padding-top:1px}
-.sys .v{color:var(--mut);font-size:13.5px;line-height:1.55}
+/* definition tables (systems + glossary) */
+.table{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.row{display:flex;gap:16px;padding:13px 16px;border-top:1px solid var(--line);background:var(--card)}
+.row:first-child{border-top:none}
+.row .k{flex:0 0 128px;font-weight:700;font-size:13.5px;letter-spacing:-0.1px;padding-top:1px}
+.row .v{color:var(--mut);font-size:13.5px;line-height:1.55}
+.glossary .k{flex-basis:110px;color:var(--blu)}
 
 /* changelog */
-.log .entry{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:14px 16px}
-.log .ver{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
-.log .ver b{font-size:14px}
-.log .ver span{color:var(--dim);font-size:12px}
-.log p{font-size:13.5px;color:var(--mut);margin:0}
+.entry{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:15px 17px}
+.entry + .entry{margin-top:10px}
+.ver{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.ver b{font-size:14px;letter-spacing:-0.1px}
+.ver span{color:var(--dim);font-size:12px}
+.entry p{font-size:13.5px;color:var(--mut);margin:0}
 
-footer{padding:30px 0 44px;color:var(--dim);font-size:12px;letter-spacing:.4px}
+footer{border-top:1px solid var(--line);margin-top:48px}
+footer .wrap{display:flex;justify-content:space-between;align-items:center;height:62px;
+  color:var(--dim);font-size:12.5px}
 footer b{color:var(--mut);font-weight:700}
+
+@media (max-width:480px){
+  h1{font-size:26px}
+  .row{flex-direction:column;gap:3px}
+  .row .k{flex-basis:auto}
+}
 </style>
 </head>
 <body>
+
+<nav><div class="wrap">
+  <div class="brand"><span class="dots"><span class="g"></span><span class="y"></span><span class="r"></span></span>USED CAR DEALER SIM</div>
+  <a class="navplay" href="play.html">Play</a>
+</div></nav>
+
 <div class="wrap">
 
-<header>
-  <div class="lights"><span class="g"></span><span class="y"></span><span class="r"></span></div>
-  <h1>USED CAR DEALER <em>SIM</em></h1>
-  <p class="tagline">A browser-based dealership operations simulator. Acquire inventory at auction, manage reconditioning, price against the market, and run the F&amp;I office.</p>
-  <a class="play" href="play.html">Play now</a>
+<div class="hero">
+  <h1>Run the Sales, Finance, and more for <span>YOUR</span> own dealership</h1>
+  <p class="tagline">Buy inventory at auction, negotiate deals, and build backend gross in the F&amp;I office. Free in your browser — progress saves automatically.</p>
+  <a class="cta" href="play.html">Play now</a>
   <div class="meta">Free · No download · No account · Progress saves to your device</div>
 
   <div class="strip">
     <div><b>$10,000</b><small>Opening balance</small></div>
     <div><b>10–100</b><small>Lot capacity</small></div>
     <div><b>3</b><small>Credit tiers</small></div>
-    <div><b>4</b><small>F&amp;I products</small></div>
+    <div><b>9</b><small>VSC configurations</small></div>
   </div>
-</header>
+</div>
 
 <section>
-  <p class="kicker">Overview</p>
-  <p>Used Car Dealer Sim puts you in the owner's chair at an independent used car store. Every unit on the ground is your money: what you paid at the block, what the shop charged to make it front-line ready, and what it costs to hold while it sits. Revenue comes from two places — the spread between acquisition cost and selling price, and the F&amp;I office, where financed deals generate product sales and lender reserve.</p>
-  <p>The simulation is built around the numbers the trade actually runs on: MMR as the wholesale anchor, condition announcements at auction, days-in-stock pressure on retail pricing, credit-tiered lending with realistic rates and terms, and per-copy gross tracked front and back.</p>
+  <div class="stitle">Overview</div>
+  <p>You own an independent used car store. Every unit on the lot is your capital: the purchase price at auction, the reconditioning bill, and the daily cost of holding it until it sells.</p>
+  <p>Profit comes from two places: the spread between what you paid and what you sell for, and the F&amp;I office, where financed deals generate rate participation and product sales. The simulation uses real industry numbers — MMR at the auction, condition announcements, days-in-stock pricing pressure, credit-tiered lending with accurate payment math, and gross tracked front and back per unit.</p>
 </section>
 
 <section>
-  <p class="kicker">Systems</p>
-  <div class="sys">
-    <div class="row"><div class="k">Auction</div><div class="v">A daily run list with live bidding against a competitor. Each unit carries a condition light and a reconditioning estimate. Green announcements are clean; yellow and red conceal risk — the shop bill can come in well over the estimate.</div></div>
-    <div class="row"><div class="k">Book values</div><div class="v">Every vehicle displays MMR, trade-in, and retail. The margin is made at acquisition: the spread between your buy figure and retail, less reconditioning and holding cost, is the deal.</div></div>
-    <div class="row"><div class="k">Retail desk</div><div class="v">Set asking prices against retail value. Pricing discipline drives traffic; units over 30 days in stock are flagged as aged and pull fewer customers. Offers can be accepted, countered, or declined — counters carry walk risk.</div></div>
-    <div class="row"><div class="k">Trade-ins</div><div class="v">Roughly a third of customers bring a trade with a requested ACV. Accept the number and the unit is yours — including whatever reconditioning it actually needs.</div></div>
-    <div class="row"><div class="k">F&amp;I office</div><div class="v">About 60% of customers finance. Deals clear the lender first, then reach the menu: service contract, GAP, tire &amp; wheel, and appearance protection, each presented once. Payment, APR, term, and down payment are computed from the customer's credit profile and update live as products are added.</div></div>
-    <div class="row"><div class="k">Credit line</div><div class="v">Working capital at 12% APR, billed daily against the outstanding balance. The limit scales with lot capacity, from $100,000 at 10 spots to $1,000,000 at 100.</div></div>
+  <div class="stitle">Game systems</div>
+  <div class="table">
+    <div class="row"><div class="k">Auction</div><div class="v">A daily run list with live bidding against a competitor. Condition lights price the risk: green is clean, yellow and red conceal shop bills that can run well over the announcement.</div></div>
+    <div class="row"><div class="k">Book values</div><div class="v">Every vehicle shows MMR, trade-in, and retail. The margin is made at acquisition — the spread between your buy figure and retail, less reconditioning and holding cost, is the deal.</div></div>
+    <div class="row"><div class="k">Negotiation</div><div class="v">Work the counter and the trade allowance on sliders while a live sentiment gauge shows how the customer is taking it. Push too hard and they walk.</div></div>
+    <div class="row"><div class="k">F&amp;I office</div><div class="v">Roughly 60% of customers finance. Deals clear the lender, contract two points over the buy rate, and hit the menu: configurable service contracts, GAP, tire &amp; wheel, and appearance protection, with payments computed from the customer's actual credit profile.</div></div>
+    <div class="row"><div class="k">Credit line</div><div class="v">Working capital at 12% APR billed daily against the balance. The limit scales with lot capacity, from $100,000 at 10 spots to $1,000,000 at 100.</div></div>
+    <div class="row"><div class="k">Staffing</div><div class="v">After the first expansion, hire a Used Car Buyer at $1,000 per day to work the sale for you — buys under MMR, avoids red lights, caps at three units a day.</div></div>
   </div>
 </section>
 
 <section>
-  <p class="kicker">Operator's manual</p>
-  <h2>Buy under MMR or don't buy</h2>
-  <p>The competitor at the auction bids to a maximum derived from MMR. If you find yourself paying over the number, you are inheriting someone else's problem plus a buy fee. Walk. There is another run list tomorrow, and the discipline to pass is worth more than any single unit.</p>
-  <h2>Condition lights price the risk, not the car</h2>
-  <p>A red-light unit at the right money outperforms a green-light unit at the wrong money. The estimate on yellow and red announcements can run 50% over once the shop tears in, so bid as if it will. Green lights cost more at the block precisely because they carry no surprise.</p>
-  <h2>Turn beats gross</h2>
-  <p>Every unit accrues holding cost daily, and the credit line bills interest every morning whether you sell or not. A $1,800 front in 12 days beats a $2,600 front in 45. When a unit crosses 30 days in stock, reprice it — aged inventory pulls less traffic at any number, and the loss compounds.</p>
-  <h2>The back end carries the store</h2>
-  <p>Front-end margin on a competitively priced unit is thin. The store's real profitability lives in the F&amp;I office: reserve on financed paper and product penetration. Service contracts convert better on high-mileage units; GAP converts best on subprime paper, which also carries the largest reserve. A subprime customer with a full menu regularly out-grosses a prime cash buyer paying closer to ask.</p>
-  <h2>Manage the line like inventory</h2>
-  <p>The credit line is leverage, and leverage cuts both ways. Drawn capital sitting idle is pure interest expense; drawn capital in fast-turning inventory is how the store scales. Repay when cash is heavy, draw when the run list is strong, and never let the balance ride against a lot full of aged units.</p>
+  <div class="stitle">Strategy</div>
+  <h3>Buying at auction</h3>
+  <p>The competing bidder's maximum is based on MMR. Paying over MMR means overpaying plus a buy fee, so pass when the bidding runs past the number — a new run list comes every day.</p>
+  <h3>Condition lights</h3>
+  <p>Green lights are clean. Yellow and red carry reconditioning estimates that can come in up to 50% over once the shop opens the car up, so bid assuming the worst case. A red-light car bought cheap enough is still a good buy; a green-light car bought too high is not.</p>
+  <h3>Inventory turn</h3>
+  <p>Every unit costs money daily to hold, and the credit line bills interest every morning. Selling for $1,800 front in 12 days beats $2,600 front in 45. Reprice anything past 30 days in stock — aged units pull fewer customers at any price.</p>
+  <h3>Negotiation</h3>
+  <p>Watch the sentiment gauge while setting your counter and trade allowance. A receptive customer will accept a meaningful counter; an irritated one walks over small money. Cutting the trade allowance damages sentiment faster than raising the price does.</p>
+  <h3>F&amp;I</h3>
+  <p>Front margin on a competitively priced unit is thin, so most profit comes from the F&amp;I office: participation on financed deals and product sales. Service contracts sell better on high-mileage cars, GAP sells best to subprime customers, and a financed subprime deal with products regularly out-grosses a cash deal at a higher price.</p>
 </section>
 
-<section class="log">
-  <p class="kicker">Changelog</p>
+<section>
+  <div class="stitle">Glossary</div>
+  <div class="table glossary">
+    <div class="row"><div class="k">MMR</div><div class="v">Manheim Market Report — the wholesale benchmark. What a car is worth at auction in its current condition.</div></div>
+    <div class="row"><div class="k">ACV</div><div class="v">Actual Cash Value — what a trade-in is really worth to the dealer, as opposed to the allowance shown to the customer.</div></div>
+    <div class="row"><div class="k">Front-end gross</div><div class="v">Profit on the vehicle itself: selling price minus total cost (purchase, fees, reconditioning).</div></div>
+    <div class="row"><div class="k">Back-end gross</div><div class="v">Profit from the F&amp;I office: rate participation plus margin on protection products.</div></div>
+    <div class="row"><div class="k">PVR</div><div class="v">Per Vehicle Retail — average total gross (front plus back) per unit sold. The core measure of how much each deal is worth.</div></div>
+    <div class="row"><div class="k">Buy rate</div><div class="v">The interest rate the lender approves the loan at. The dealer contracts the customer at a marked-up rate — here, two points over.</div></div>
+    <div class="row"><div class="k">Participation</div><div class="v">The dealer's share of the extra finance charge created by the rate markup. Paid by the lender as backend profit on financed deals.</div></div>
+    <div class="row"><div class="k">VSC</div><div class="v">Vehicle Service Contract — an extended coverage product sold in F&amp;I, priced by coverage level, term, and the vehicle's age and mileage.</div></div>
+    <div class="row"><div class="k">GAP</div><div class="v">Coverage that pays the difference between a loan balance and an insurance payout if the car is totaled. Only relevant on financed deals.</div></div>
+    <div class="row"><div class="k">Reconditioning</div><div class="v">The shop work that makes an acquired unit ready to retail. "Recon" is a direct cost against the deal.</div></div>
+    <div class="row"><div class="k">Run list</div><div class="v">The lineup of vehicles crossing the auction block on a given day.</div></div>
+    <div class="row"><div class="k">Days in stock</div><div class="v">How long a unit has sat on the lot. Aged inventory (30+ days) draws fewer customers and bleeds holding cost.</div></div>
+  </div>
+</section>
+
+<section>
+  <div class="stitle">Changelog</div>
+  <div class="entry">
+    <div class="ver"><b>Version 1.1</b><span>July 2026</span></div>
+    <p>Rate participation: dealer contracts 2 points over the lender buy rate and holds the spread. Slider-based negotiation on price and trade allowance with a live customer sentiment gauge and walk risk. Lender minimums ($5,000 amount financed) with cash conversion, term assignment by amount and credit tier. Configurable service contracts — three coverage levels, three terms, mileage eligibility caps, two presentation attempts. Used Car Buyer hire ($1,000/day) after first lot expansion. Reduced organic traffic; marketing spend now material. Value floors, natural odometer readings, dealership naming, and in-game notices explaining any blocked action.</p>
+  </div>
   <div class="entry">
     <div class="ver"><b>Version 1.0</b><span>July 2026</span></div>
     <p>Initial release. Live auction bidding with condition announcements, MMR / trade / retail book values, reconditioning pipeline, retail pricing with days-in-stock aging, trade-in appraisal, credit-tiered lending with computed payments, four-product F&amp;I menu with lender reserve, 12% APR credit line, lot expansion to 100 units, and local auto-save.</p>
   </div>
 </section>
 
-<footer>
-  Created by <b>Hutchthecarplug</b> · © 2026 · Used Car Dealer Sim
-</footer>
-
 </div>
+
+<footer><div class="wrap">
+  <span>© 2026 Used Car Dealer Sim</span>
+  <span>Created by <b>Hutchthecarplug</b></span>
+</div></footer>
+
 </body>
 </html>

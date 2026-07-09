@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Play — Used Car Dealer Sim</title>
 <meta name="description" content="Run an independent used car dealership. Buy at auction, manage reconditioning, work the F&I desk, and grow the operation.">
-<meta name="theme-color" content="#0E1116">
+<meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Dealer Sim">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<style>html,body{background:#0E1116;margin:0}</style>
+<style>html,body{background:#000000;margin:0}</style>
 </head>
 <body>
 <div id="root"></div>
@@ -54,18 +54,139 @@ const CAPS = [10, 30, 50, 100];
 const CAP_COST = { 30: 25000, 50: 60000, 100: 150000 };
 const MKT = [
   { name: "None", cost: 0, lead: 0, offer: 0 },
-  { name: "Local classifieds", cost: 150, lead: 0.08, offer: 0 },
-  { name: "Paid listings", cost: 400, lead: 0.18, offer: 0.01 },
-  { name: "Premium campaign", cost: 900, lead: 0.3, offer: 0.025 },
+  { name: "Local classifieds", cost: 150, lead: 0.07, offer: 0 },
+  { name: "Paid listings", cost: 400, lead: 0.16, offer: 0.01 },
+  { name: "Premium campaign", cost: 900, lead: 0.28, offer: 0.025 },
+];
+const LOAN_CAP = { 10: 100000, 30: 300000, 50: 500000, 100: 1000000 };
+const LINE_APR = 0.12;
+const BUYER_WAGE = 1000;
+const MIN_FINANCED = 5000; // lender floor on amount financed
+const MARKUP = 2.0; // rate participation the lender allows the dealer, in points
+const PARTICIPATION_SPLIT = 0.72; // dealer's share of the finance charge differential
+const TIER_LENDING = {
+  prime: { buyLo: 5.9, buyHi: 7.9, maxTerm: 72, decline: 0.02, downLo: 0.1, downHi: 0.25 },
+  "near-prime": { buyLo: 9.9, buyHi: 12.9, maxTerm: 72, decline: 0.08, downLo: 0.05, downHi: 0.15 },
+  subprime: { buyLo: 15.9, buyHi: 20.9, maxTerm: 60, decline: 0.22, downLo: 0, downHi: 0.08 },
+};
+const VSC_COV = [
+  { key: "pt", name: "Powertrain", mult: 1.0 },
+  { key: "sc", name: "Comprehensive", mult: 1.45 },
+  { key: "ex", name: "Exclusionary", mult: 1.9, maxMiles: 100000 },
+];
+const VSC_TERM = [
+  { months: 24, miles: 24000, mult: 1.0 },
+  { months: 36, miles: 36000, mult: 1.35 },
+  { months: 48, miles: 48000, mult: 1.62 },
+];
+const PRODUCTS = [
+  { key: "gap", name: "GAP", price: 900, cost: 350, financeOnly: true },
+  { key: "tw", name: "Tire & Wheel", price: 800, cost: 350 },
+  { key: "app", name: "Appearance Protection", price: 700, cost: 250 },
 ];
 
-const LOAN_CAP = { 10: 100000, 30: 300000, 50: 500000, 100: 1000000 };
-const LINE_APR = 0.12; // simple interest on the credit line, billed daily
+const fmt = (n) => "$" + Math.round(n).toLocaleString();
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const pmt = (amount, apr, months) => {
   if (amount <= 0) return 0;
   const r = apr / 100 / 12;
   return (r * amount) / (1 - Math.pow(1 + r, -months));
 };
+// dealer's share of the finance charge created by the 2-point markup
+const participation = (financed, buyRate, sellRate, months) => {
+  if (financed <= 0) return 0;
+  const diff = (pmt(financed, sellRate, months) - pmt(financed, buyRate, months)) * months;
+  return Math.round((diff * PARTICIPATION_SPLIT) / 10) * 10;
+};
+const vscCost = (car, cov, term) => {
+  const base = 420 + car.tier * 260 + (car.miles / 1000) * 5;
+  return Math.round((base * cov.mult * term.mult) / 25) * 25;
+};
+const vscPrice = (car, cov, term) => Math.round((vscCost(car, cov, term) * 1.75) / 50) * 50;
+
+let UID = 1;
+
+function genCar() {
+  const m = pick(MODELS);
+  const year = 2014 + Math.floor(rnd(0, 9));
+  const age = 2026 - year;
+  const miles = Math.max(3000, Math.floor(age * rnd(7800, 16500) + rnd(0, 999)));
+  const light = Math.random() < 0.45 ? "green" : Math.random() < 0.65 ? "yellow" : "red";
+  const reconEst = light === "green" ? Math.round(rnd(100, 600) / 50) * 50
+    : light === "yellow" ? Math.round(rnd(800, 2400) / 50) * 50
+    : Math.round(rnd(2600, 5800) / 50) * 50;
+  const reconActual = light === "green" ? reconEst
+    : Math.round((reconEst * rnd(0.75, 1.5)) / 50) * 50;
+  let retail = m.base * (1 - age * 0.055) * (1 - miles / 400000);
+  retail *= rnd(0.94, 1.06);
+  retail = Math.max(4500, Math.round(retail / 100) * 100);
+  const mmr = Math.max(500, Math.round((retail - reconEst - rnd(2600, 3400)) / 100) * 100);
+  const tradeVal = Math.max(500, Math.round((mmr - rnd(300, 800)) / 100) * 100);
+  return { id: UID++, name: `${year} ${m.name}`, year, miles, light, reconEst, reconActual, retail, mmr, tradeVal, tier: m.tier };
+}
+
+function genAuctionLot(cap) {
+  const n = cap >= 100 ? 20 : cap >= 50 ? 14 : cap >= 30 ? 10 : 6;
+  return Array.from({ length: n }, () => {
+    const c = genCar();
+    const rivalMax = Math.max(750, Math.round((c.mmr * rnd(0.9, 1.1)) / 100) * 100);
+    const currentBid = Math.max(500, Math.round((rivalMax * 0.55) / 100) * 100);
+    return { ...c, rivalMax, currentBid, leader: "rival", closed: false };
+  });
+}
+
+function genLeads(lot, mkt) {
+  const leads = [];
+  lot.filter((c) => c.status === "frontline").forEach((c) => {
+    const ratio = c.askPrice / c.retail;
+    let p = 0.3 - (ratio - 0.92) * 1.9;
+    p += MKT[mkt].lead;
+    p *= Math.max(0.45, 1 - c.daysOnLot / 70);
+    p = clamp(p, 0.02, 0.62);
+    if (Math.random() < p) {
+      const offer = Math.max(500, Math.round((c.askPrice * rnd(0.86 + MKT[mkt].offer, 0.96 + MKT[mkt].offer)) / 100) * 100);
+      const payType = Math.random() < 0.6 ? "finance" : "cash";
+      const r = Math.random();
+      const credit = payType === "cash" ? null : r < 0.4 ? "prime" : r < 0.75 ? "near-prime" : "subprime";
+      let trade = null;
+      if (Math.random() < 0.3) {
+        const t = genCar();
+        const wants = Math.max(500, Math.round((t.tradeVal * rnd(0.9, 1.2)) / 100) * 100);
+        trade = { ...t, wants, status: "recon" };
+      }
+      const mood = Math.round(rnd(55, 88));
+      leads.push({
+        id: UID++, carId: c.id, buyer: pick(BUYERS), offer, trade, payType, credit,
+        mood, attempts: 0, counter: null, allowance: null, open: false,
+      });
+    }
+  });
+  return leads;
+}
+
+const START_LOT = () => Array.from({ length: 2 }, () => {
+  const c = genCar();
+  return { ...c, light: "green", cost: c.mmr + 400, status: "frontline", askPrice: Math.round((c.retail * 1.0) / 100) * 100, daysOnLot: Math.floor(rnd(2, 12)), reconDays: 0 };
+});
+
+// negotiation sentiment: how the customer feels about the numbers on the table
+function sentiment(lead, car) {
+  const counter = lead.counter ?? lead.offer;
+  const gap = Math.max(car.askPrice - lead.offer, 1);
+  const pricePush = clamp((counter - lead.offer) / gap, 0, 1);
+  let h = lead.mood - 40 * Math.pow(pricePush, 1.1);
+  if (lead.trade) {
+    const allow = lead.allowance ?? lead.trade.wants;
+    const cut = clamp((lead.trade.wants - allow) / lead.trade.wants, 0, 1);
+    h -= Math.min(36, 62 * Math.pow(cut, 1.05));
+  }
+  h -= lead.attempts * 9;
+  return clamp(Math.round(h), 1, 99);
+}
+const sentimentLabel = (h) =>
+  h >= 70 ? ["Receptive", "#3BD16F"] : h >= 45 ? ["Neutral", "#B9BDC4"] : h >= 25 ? ["Irritated", "#FFC42E"] : ["About to walk", "#FF5A48"];
 
 // ---------- SAVE SYSTEM ----------
 // Uses Claude artifact storage when available, falls back to localStorage for self-hosted builds.
@@ -91,79 +212,6 @@ const store = {
   },
 };
 
-const PRODUCTS = [
-  { key: "vsc", name: "Vehicle Service Contract", price: 2200, cost: 1100 },
-  { key: "gap", name: "GAP", price: 900, cost: 350, financeOnly: true },
-  { key: "tw", name: "Tire & Wheel", price: 800, cost: 350 },
-  { key: "app", name: "Appearance Protection", price: 700, cost: 250 },
-];
-
-const fmt = (n) => "$" + Math.round(n).toLocaleString();
-const rnd = (a, b) => a + Math.random() * (b - a);
-const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-let UID = 1;
-
-function genCar() {
-  const m = pick(MODELS);
-  const year = 2014 + Math.floor(rnd(0, 9));
-  const age = 2026 - year;
-  const miles = Math.round((age * rnd(8000, 16000)) / 500) * 500;
-  const light = Math.random() < 0.45 ? "green" : Math.random() < 0.65 ? "yellow" : "red";
-  const reconEst = light === "green" ? Math.round(rnd(100, 600) / 50) * 50
-    : light === "yellow" ? Math.round(rnd(800, 2400) / 50) * 50
-    : Math.round(rnd(2600, 5800) / 50) * 50;
-  const reconActual = light === "green" ? reconEst
-    : Math.round((reconEst * rnd(0.75, 1.5)) / 50) * 50;
-  let retail = m.base * (1 - age * 0.055) * (1 - miles / 400000);
-  retail *= rnd(0.94, 1.06);
-  retail = Math.max(4500, Math.round(retail / 100) * 100);
-  const mmr = Math.round((retail - reconEst - rnd(2600, 3400)) / 100) * 100; // condition-adjusted wholesale
-  const tradeVal = Math.round((mmr - rnd(300, 800)) / 100) * 100;
-  return { id: UID++, name: `${year} ${m.name}`, year, miles, light, reconEst, reconActual, retail, mmr, tradeVal, tier: m.tier };
-}
-
-function genAuctionLot(cap) {
-  const n = cap >= 100 ? 20 : cap >= 50 ? 14 : cap >= 30 ? 10 : 6;
-  return Array.from({ length: n }, () => {
-    const c = genCar();
-    const rivalMax = Math.max(1500, Math.round((c.mmr * rnd(0.9, 1.1)) / 100) * 100);
-    const currentBid = Math.max(500, Math.round((rivalMax * 0.55) / 100) * 100);
-    return { ...c, rivalMax, currentBid, leader: "rival", closed: false };
-  });
-}
-
-function genLeads(lot, mkt) {
-  const leads = [];
-  lot.filter((c) => c.status === "frontline").forEach((c) => {
-    const ratio = c.askPrice / c.retail;
-    let p = 0.75 - (ratio - 0.9) * 2.2;
-    p += MKT[mkt].lead;
-    p *= Math.max(0.45, 1 - c.daysOnLot / 70);
-    p = Math.max(0.04, Math.min(0.85, p));
-    if (Math.random() < p) {
-      const offer = Math.round((c.askPrice * rnd(0.87 + MKT[mkt].offer, 0.97 + MKT[mkt].offer)) / 100) * 100;
-      // realistic independent-store mix: ~60% finance / 40% cash
-      const payType = Math.random() < 0.6 ? "finance" : "cash";
-      const r = Math.random();
-      const credit = payType === "cash" ? null : r < 0.4 ? "prime" : r < 0.75 ? "near-prime" : "subprime";
-      let trade = null;
-      if (Math.random() < 0.3) {
-        const t = genCar();
-        const wants = Math.round((t.tradeVal * rnd(0.9, 1.2)) / 100) * 100;
-        trade = { ...t, wants, status: "recon" };
-      }
-      leads.push({ id: UID++, carId: c.id, buyer: pick(BUYERS), offer, trade, countered: false, payType, credit });
-    }
-  });
-  return leads;
-}
-
-const START_LOT = () => Array.from({ length: 2 }, () => {
-  const c = genCar();
-  return { ...c, light: "green", cost: c.mmr + 400, status: "frontline", askPrice: Math.round((c.retail * 1.0) / 100) * 100, daysOnLot: Math.floor(rnd(2, 12)), reconDays: 0 };
-});
-
 // ---------- APP ----------
 function App() {
   const [tab, setTab] = useState("lot");
@@ -176,15 +224,17 @@ function App() {
   const [leads, setLeads] = useState([]);
   const [log, setLog] = useState(["Day 1 — Operations commenced. Opening balance $10,000. 2 units in inventory."]);
   const [marketing, setMarketing] = useState(0);
+  const [dealerName, setDealerName] = useState("");
+  const [buyerHired, setBuyerHired] = useState(false);
   const [stats, setStats] = useState({ sold: 0, front: 0, back: 0, bought: 0 });
   const [editPrice, setEditPrice] = useState(null);
-  const [deal, setDeal] = useState(null); // F&I desk state
+  const [deal, setDeal] = useState(null);
   const [dead, setDead] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [notice, setNotice] = useState(null);
   const [booted, setBooted] = useState(false);
   const saveTimer = useRef(null);
 
-  // Load save on start
   useEffect(() => {
     (async () => {
       const raw = await store.get(SAVE_KEY);
@@ -192,8 +242,12 @@ function App() {
         try {
           const d = JSON.parse(raw);
           setDay(d.day); setCash(d.cash); setLoan(d.loan); setLot(d.lot);
-          setLotCap(d.lotCap); setAuction(d.auction); setLeads(d.leads);
-          setMarketing(typeof d.marketing === "boolean" ? (d.marketing ? 2 : 0) : (d.marketing ?? 0)); setStats(d.stats); setLog(d.log);
+          setLotCap(d.lotCap); setAuction(d.auction);
+          setLeads((d.leads || []).map((l) => ({ mood: 70, attempts: 0, counter: null, allowance: null, open: false, ...l })));
+          setMarketing(typeof d.marketing === "boolean" ? (d.marketing ? 2 : 0) : (d.marketing ?? 0));
+          setBuyerHired(d.buyerHired ?? false);
+          setDealerName(d.dealerName ?? "");
+          setStats(d.stats); setLog(d.log);
           if (d.uid) UID = d.uid;
         } catch { /* corrupted save — start fresh */ }
       }
@@ -201,56 +255,56 @@ function App() {
     })();
   }, []);
 
-  // Auto-save (debounced) on any state change
   useEffect(() => {
     if (!booted || dead) return;
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       store.set(SAVE_KEY, JSON.stringify({
-        day, cash, loan, lot, lotCap, auction, leads, marketing, stats, log, uid: UID,
+        day, cash, loan, lot, lotCap, auction, leads, marketing, buyerHired, dealerName, stats, log, uid: UID,
       }));
     }, 400);
     return () => clearTimeout(saveTimer.current);
-  }, [booted, dead, day, cash, loan, lot, lotCap, auction, leads, marketing, stats, log]);
+  }, [booted, dead, day, cash, loan, lot, lotCap, auction, leads, marketing, buyerHired, dealerName, stats, log]);
 
   const newGame = async () => {
     await store.del(SAVE_KEY);
     window.location.reload();
   };
 
-  const netWorth = useMemo(
-    () => cash + lot.reduce((s, c) => s + c.mmr, 0) - loan,
-    [cash, lot, loan]
-  );
+  const netWorth = useMemo(() => cash + lot.reduce((s, c) => s + c.mmr, 0) - loan, [cash, lot, loan]);
   const loanCap = LOAN_CAP[lotCap];
   const credit = loanCap - loan;
+  const addLog = (msg) => setLog((l) => [msg, ...l].slice(0, 50));
+  const dailyOverhead = () =>
+    400 + lot.length * 15 + MKT[marketing].cost + (buyerHired ? BUYER_WAGE : 0) + Math.round(loan * (LINE_APR / 365));
 
+  // ----- CREDIT LINE -----
   const draw = (amt) => {
+    if (credit <= 0) return setNotice("Credit limit reached. The line is capped at " + fmt(loanCap) + " at this lot size — expand the lot to increase it.");
     const a = Math.min(amt, credit);
-    if (a <= 0) return addLog("Credit limit reached. Expand the lot to increase it.");
     setLoan((v) => v + a);
     setCash((v) => v + a);
     addLog(`Credit line draw: ${fmt(a)} at 12% APR. Outstanding balance ${fmt(loan + a)}.`);
   };
   const repay = (amt) => {
+    if (loan <= 0) return setNotice("No outstanding balance on the credit line.");
+    if (cash <= 0) return setNotice("No cash available to make a payment.");
     const a = Math.min(amt, loan, cash);
-    if (a <= 0) return;
     setLoan((v) => v - a);
     setCash((v) => v - a);
     addLog(`Credit line payment: ${fmt(a)}. Outstanding balance ${fmt(loan - a)}.`);
   };
-  const addLog = (msg) => setLog((l) => [msg, ...l].slice(0, 50));
 
   // ----- AUCTION -----
   const bid = (id) => {
-    setAuction((a) => a.map((c) => {
-      if (c.id !== id || c.closed) return c;
-      const myBid = c.currentBid + 250;
-      if (myBid > cash) return c;
-      if (c.rivalMax >= myBid + 250 && Math.random() < 0.92) {
-        return { ...c, currentBid: myBid + 250, leader: "rival" };
-      }
-      return { ...c, currentBid: myBid, leader: "you" };
+    const c = auction.find((x) => x.id === id);
+    if (!c || c.closed) return;
+    const myBid = c.currentBid + 250;
+    if (myBid + 350 > cash) return setNotice(`Insufficient cash for this bid. ${fmt(myBid)} plus the $350 buyer fee exceeds your ${fmt(cash)} on hand. Draw on the credit line in the Office.`);
+    setAuction((a) => a.map((x) => {
+      if (x.id !== id) return x;
+      if (x.rivalMax >= myBid + 250 && Math.random() < 0.92) return { ...x, currentBid: myBid + 250, leader: "rival" };
+      return { ...x, currentBid: myBid, leader: "you" };
     }));
   };
 
@@ -258,8 +312,8 @@ function App() {
     const c = auction.find((x) => x.id === id);
     if (!c || c.leader !== "you") return;
     const total = c.currentBid + 350;
-    if (total > cash) return addLog("Insufficient funds to cover the bid plus buyer fee.");
-    if (lot.length >= lotCap) return addLog("Lot at capacity. Sell inventory or expand.");
+    if (total > cash) return setNotice(`Insufficient cash to fund this purchase. Bid plus buyer fee is ${fmt(total)} and you have ${fmt(cash)}. Draw on the credit line in the Office.`);
+    if (lot.length >= lotCap) return setNotice(`The lot is at capacity (${lotCap} units). Sell inventory or expand the lot in the Office.`);
     setCash((v) => v - total);
     setAuction((a) => a.map((x) => (x.id === id ? { ...x, closed: true } : x)));
     const reconDays = c.light === "green" ? 0 : c.light === "yellow" ? 1 : 2;
@@ -274,104 +328,195 @@ function App() {
   // ----- RECON -----
   const startRecon = (id) => {
     const c = lot.find((x) => x.id === id);
-    if (!c || c.reconActual > cash) return addLog("Insufficient funds for reconditioning.");
+    if (!c) return;
+    if (c.reconActual > cash) return setNotice(`The shop bill is ${fmt(c.reconActual)} and you have ${fmt(cash)} in cash. Draw on the credit line in the Office to cover it.`);
     setCash((v) => v - c.reconActual);
     setLot((l) => l.map((x) => (x.id === id ? { ...x, cost: x.cost + x.reconActual, reconPaid: true } : x)));
     addLog(`Reconditioning on the ${c.name} totaled ${fmt(c.reconActual)}${c.reconActual > c.reconEst * 1.2 ? " — over the announced estimate." : "."}`);
   };
 
-  // ----- DEAL FLOW -----
-  const startDeal = (lead, price) => {
+  // ----- NEGOTIATION -----
+  const updLead = (id, patch) => setLeads((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+
+  const submitDeal = (lead) => {
     const car = lot.find((c) => c.id === lead.carId);
     if (!car) return;
-    if (lead.trade && lot.length >= lotCap) return addLog("No capacity for the trade vehicle. Free a spot or decline.");
-    // bank approval for finance buyers
+    const price = lead.counter ?? lead.offer;
+    const allowance = lead.trade ? (lead.allowance ?? lead.trade.wants) : 0;
+    const h = sentiment(lead, car);
+    if (price <= lead.offer && (!lead.trade || allowance >= lead.trade.wants)) {
+      return startDeal(lead, price, allowance, h); // their terms — always closes
+    }
+    if (Math.random() * 100 < h) return startDeal(lead, price, allowance, h);
+    // rejected
+    if (lead.attempts >= 1 || h < 28 || Math.random() < 0.5) {
+      setLeads((ls) => ls.filter((l) => l.id !== lead.id));
+      addLog(`${lead.buyer} rejected the numbers and left. ${car.name} remains in inventory.`);
+    } else {
+      updLead(lead.id, { attempts: lead.attempts + 1 });
+      addLog(`${lead.buyer} declined the counter and is holding at ${fmt(lead.offer)} on the ${car.name}. One more attempt at most.`);
+    }
+  };
+
+  // ----- DEAL DESK -----
+  const startDeal = (lead, price, allowance, h) => {
+    const car = lot.find((c) => c.id === lead.carId);
+    if (!car) return;
+    if (lead.trade && lot.length >= lotCap) return setNotice(`No capacity for the trade vehicle — the lot is full at ${lotCap} units. Sell a unit, expand, or work the deal without the trade by declining it.`);
+    let dealPay = lead.payType;
+    let terms = null;
+    let convertedNote = null;
     if (lead.payType === "finance") {
-      const declineP = lead.credit === "subprime" ? 0.22 : lead.credit === "near-prime" ? 0.08 : 0.02;
-      if (Math.random() < declineP) {
+      const L = TIER_LENDING[lead.credit];
+      if (Math.random() < L.decline) {
         setLeads((ls) => ls.filter((l) => l.id !== lead.id));
         return addLog(`${lead.buyer} was declined by the lender (${lead.credit}). Deal terminated.`);
       }
+      const buyRate = Math.round(rnd(L.buyLo, L.buyHi) * 10) / 10;
+      const sellRate = Math.round((buyRate + MARKUP) * 10) / 10;
+      let down = Math.round((price * rnd(L.downLo, L.downHi)) / 100) * 100;
+      down = clamp(down, 0, Math.floor(price * 0.5));
+      const financedEst = price - down - allowance;
+      if (financedEst < MIN_FINANCED) {
+        dealPay = "cash";
+        convertedNote = "Amount financed fell below the lender's $5,000 minimum — customer is paying cash.";
+      } else {
+        const months = financedEst < 10000 ? 48 : financedEst < 16000 ? 60 : L.maxTerm;
+        terms = { buyRate, sellRate, months, down };
+      }
     }
-    const reserve = lead.payType === "finance"
-      ? Math.round((lead.credit === "subprime" ? rnd(800, 1300) : lead.credit === "near-prime" ? rnd(500, 900) : rnd(250, 550)) / 50) * 50
-      : 0;
-    let terms = null;
-    if (lead.payType === "finance") {
-      const apr = lead.credit === "prime" ? rnd(6.9, 9.4) : lead.credit === "near-prime" ? rnd(11.5, 14.9) : rnd(17.9, 22.9);
-      const months = lead.credit === "subprime" ? 60 : 72;
-      const downPct = lead.credit === "prime" ? rnd(0.1, 0.25) : lead.credit === "near-prime" ? rnd(0.05, 0.15) : rnd(0, 0.08);
-      const down = Math.round((price * downPct) / 100) * 100;
-      terms = { apr: Math.round(apr * 10) / 10, months, down };
-    }
-    setDeal({ lead, car, price, reserve, back: reserve, results: {}, terms });
+    setDeal({
+      lead, car, price, allowance, dealPay, terms, convertedNote,
+      results: {}, vsc: { attempts: 0, result: null, cov: 0, term: 0, soldPrice: 0, soldCost: 0 },
+      h: h ?? lead.mood,
+    });
     setLeads((ls) => ls.filter((l) => l.id !== lead.id));
   };
 
-  const pitch = (key) => {
+  const dealFinanced = (d) => {
+    if (!d.terms) return 0;
+    const products = PRODUCTS.reduce((s, p) => s + (d.results[p.key] === "sold" ? p.price : 0), 0) + d.vsc.soldPrice;
+    return Math.max(0, d.price - d.terms.down - d.allowance + products);
+  };
+  const dealReserve = (d) => (d.terms ? participation(dealFinanced(d), d.terms.buyRate, d.terms.sellRate, d.terms.months) : 0);
+  const dealBack = (d) => {
+    const productProfit = PRODUCTS.reduce((s, p) => s + (d.results[p.key] === "sold" ? p.price - p.cost : 0), 0)
+      + (d.vsc.result === "sold" ? d.vsc.soldPrice - d.vsc.soldCost : 0);
+    return productProfit + dealReserve(d);
+  };
+
+  const pitchProduct = (key) => {
     setDeal((d) => {
       if (!d || d.results[key]) return d;
       const p = PRODUCTS.find((x) => x.key === key);
-      const isFin = d.lead.payType === "finance";
-      let take =
-        key === "vsc" ? (isFin ? 0.5 : 0.25) + (d.car.miles > 80000 ? 0.15 : 0)
-        : key === "gap" ? (d.lead.credit === "subprime" ? 0.6 : 0.45)
-        : key === "tw" ? 0.3
-        : 0.25;
-      const sold = Math.random() < take;
-      return {
-        ...d,
-        results: { ...d.results, [key]: sold ? "sold" : "declined" },
-        back: sold ? d.back + (p.price - p.cost) : d.back,
-      };
+      const isFin = d.dealPay === "finance";
+      let take = key === "gap" ? (d.lead.credit === "subprime" ? 0.55 : d.lead.credit === "near-prime" ? 0.45 : 0.35)
+        : key === "tw" ? (isFin ? 0.28 : 0.12)
+        : (isFin ? 0.22 : 0.08);
+      take *= d.h / 70;
+      const sold = Math.random() < clamp(take, 0.03, 0.8);
+      return { ...d, results: { ...d.results, [key]: sold ? "sold" : "declined" }, h: sold ? d.h : clamp(d.h - Math.round(rnd(4, 9)), 1, 99) };
     });
   };
+
+  const pitchVsc = () => {
+    const d = deal;
+    if (!d || d.vsc.result === "sold" || d.vsc.attempts >= 2) return;
+    const cov = VSC_COV[d.vsc.cov];
+    const term = VSC_TERM[d.vsc.term];
+    if (cov.maxMiles && d.car.miles > cov.maxMiles) {
+      return setNotice(`Exclusionary coverage is not available on this unit — the administrator caps eligibility at ${cov.maxMiles.toLocaleString()} miles and this car has ${d.car.miles.toLocaleString()}. Offer Powertrain or Comprehensive.`);
+    }
+    const price = vscPrice(d.car, cov, term);
+    const cost = vscCost(d.car, cov, term);
+    const isFin = d.dealPay === "finance";
+    let take = (isFin ? 0.42 : 0.12)
+      + (d.car.miles > 75000 ? 0.12 : 0)
+      + (d.lead.credit === "subprime" ? 0.05 : 0)
+      - (price / d.car.retail) * 0.85
+      - d.vsc.attempts * 0.12;
+    take *= d.h / 70;
+    const sold = Math.random() < clamp(take, 0.03, 0.75);
+    setDeal((x) => ({
+      ...x,
+      vsc: sold
+        ? { ...x.vsc, result: "sold", attempts: x.vsc.attempts + 1, soldPrice: price, soldCost: cost }
+        : { ...x.vsc, result: x.vsc.attempts + 1 >= 2 ? "declined" : "resisted", attempts: x.vsc.attempts + 1 },
+      h: sold ? x.h : clamp(x.h - Math.round(rnd(5, 10)), 1, 99),
+    }));
+  };
+
+  // run backout check after any declined pitch
+  useEffect(() => {
+    if (!deal) return;
+    const declines = Object.values(deal.results).filter((r) => r === "declined").length + (deal.vsc.result === "resisted" || deal.vsc.result === "declined" ? 1 : 0);
+    if (declines > 0 && deal.h < 30 && !deal.backoutChecked) {
+      if (Math.random() < 0.08) {
+        addLog(`${deal.lead.buyer} backed out of the deal in the box — pushed too hard. ${deal.car.name} remains in inventory.`);
+        setDeal(null);
+      } else {
+        setDeal((d) => (d ? { ...d, backoutChecked: true } : d));
+      }
+    }
+  }, [deal]);
 
   const fundDeal = () => {
     const d = deal;
     if (!d) return;
-    const { lead, car, price } = d;
-    const productRevenue = PRODUCTS.reduce((s, p) => s + (d.results[p.key] === "sold" ? p.price : 0), 0);
-    let cashIn = price + productRevenue + d.reserve;
+    const { lead, car, price, allowance } = d;
+    const productRevenue = PRODUCTS.reduce((s, p) => s + (d.results[p.key] === "sold" ? p.price : 0), 0) + d.vsc.soldPrice;
+    const back = dealBack(d);
+    let cashIn = price + productRevenue + dealReserve(d) - allowance;
     let newLot = lot.filter((c) => c.id !== car.id);
-    let note = `Deal funded: ${lead.buyer}, ${car.name}, ${fmt(price)} (${lead.payType}). Front ${fmt(price - car.cost)}, back ${fmt(d.back)}.`;
+    let note = `Deal funded: ${lead.buyer}, ${car.name}, ${fmt(price)} (${d.dealPay}). Front ${fmt(price - car.cost)}, back ${fmt(back)}.`;
     if (lead.trade) {
-      cashIn -= lead.trade.wants;
       const reconDays = lead.trade.light === "green" ? 0 : lead.trade.light === "yellow" ? 1 : 2;
       newLot = [...newLot, {
-        ...lead.trade, cost: lead.trade.wants,
+        ...lead.trade, cost: allowance,
         status: reconDays === 0 ? "frontline" : "recon", reconDays,
         askPrice: Math.round((lead.trade.retail * 1.02) / 100) * 100, daysOnLot: 0,
       }];
-      note += ` Trade acquired: ${lead.trade.name} at ${fmt(lead.trade.wants)} ACV.`;
+      note += ` Trade acquired: ${lead.trade.name} at ${fmt(allowance)} ACV.`;
     }
     setCash((v) => v + cashIn);
     setLot(newLot);
-    setStats((s) => ({ ...s, sold: s.sold + 1, front: s.front + (price - car.cost), back: s.back + d.back }));
+    setStats((s) => ({ ...s, sold: s.sold + 1, front: s.front + (price - car.cost), back: s.back + back }));
     setDeal(null);
     addLog(note);
   };
 
-  const counter = (lead) => {
-    const car = lot.find((c) => c.id === lead.carId);
-    const mid = Math.round(((lead.offer + car.askPrice) / 2) / 100) * 100;
-    if (Math.random() < 0.55) {
-      startDeal(lead, mid);
-    } else if (Math.random() < 0.5) {
-      setLeads((ls) => ls.map((l) => (l.id === lead.id ? { ...l, countered: true } : l)));
-      addLog(`${lead.buyer} declined the counter and is holding at ${fmt(lead.offer)} on the ${car.name}.`);
-    } else {
-      setLeads((ls) => ls.filter((l) => l.id !== lead.id));
-      addLog(`${lead.buyer} rejected the counter and left. ${car.name} remains in inventory.`);
+  // ----- USED CAR BUYER (auto-purchasing) -----
+  const runBuyer = (list, availableCash, capLeft) => {
+    let cashLeft = availableCash;
+    let slots = capLeft;
+    const bought = [];
+    const remaining = list.filter((c) => !c.closed && c.light !== "red");
+    for (const c of remaining) {
+      if (bought.length >= 3 || slots <= 0) break;
+      const target = Math.round((c.mmr * rnd(0.9, 0.99)) / 100) * 100;
+      if (c.rivalMax < target) {
+        const winBid = Math.min(c.rivalMax + 250, target);
+        const total = winBid + 350;
+        if (total <= cashLeft) {
+          cashLeft -= total;
+          slots -= 1;
+          const reconDays = c.light === "green" ? 0 : 1;
+          bought.push({
+            ...c, cost: total, status: reconDays === 0 ? "frontline" : "recon", reconDays,
+            askPrice: Math.round((c.retail * 1.02) / 100) * 100, daysOnLot: 0,
+          });
+        }
+      }
     }
+    return { bought, spent: availableCash - cashLeft };
   };
 
   // ----- ADVANCE DAY -----
   const nextDay = () => {
     const interest = Math.round(loan * (LINE_APR / 365));
-    const overhead = 400 + lot.length * 15 + MKT[marketing].cost + interest;
-    const newCash = cash - overhead;
-    const newLot = lot.map((c) => {
+    const overhead = dailyOverhead();
+    let newCash = cash - overhead;
+    let newLot = lot.map((c) => {
       if (c.status === "recon" && c.reconPaid) {
         const dd = c.reconDays - 1;
         return dd <= 0 ? { ...c, status: "frontline", reconDays: 0 } : { ...c, reconDays: dd };
@@ -379,16 +524,31 @@ function App() {
       if (c.status === "frontline") return { ...c, daysOnLot: c.daysOnLot + 1 };
       return c;
     });
+    let buyerNote = "";
+    if (buyerHired) {
+      const { bought, spent } = runBuyer(auction, newCash, lotCap - newLot.length);
+      if (bought.length) {
+        newCash -= spent;
+        newLot = [...newLot, ...bought];
+        setStats((s) => ({ ...s, bought: s.bought + bought.length }));
+        buyerNote = ` Your buyer acquired ${bought.length} unit${bought.length > 1 ? "s" : ""} for ${fmt(spent)}: ${bought.map((b) => b.name).join(", ")}.`;
+      } else {
+        buyerNote = " Your buyer found nothing worth the money at today's sale.";
+      }
+    }
     const newLeads = genLeads(newLot, marketing);
     setDay((d) => d + 1);
     setCash(newCash);
     setLot(newLot);
     setLeads(newLeads);
     setAuction(genAuctionLot(lotCap));
-    addLog(`Day ${day + 1} — overhead ${fmt(overhead)}${interest > 0 ? ` (incl ${fmt(interest)} interest)` : ""}. ${newLeads.length ? newLeads.length + " customer" + (newLeads.length > 1 ? "s" : "") + " on the lot." : "No customer traffic."}`);
+    addLog(`Day ${day + 1} — overhead ${fmt(overhead)}${interest > 0 ? ` (incl ${fmt(interest)} interest)` : ""}.${buyerNote} ${newLeads.length ? newLeads.length + " customer" + (newLeads.length > 1 ? "s" : "") + " on the lot." : "No customer traffic."}`);
     if (newCash < 0) {
-      if (credit <= 0) setDead(true);
-      else addLog("ACCOUNT OVERDRAWN — draw on the credit line to continue operations.");
+      if (loanCap - loan > 0) {
+        addLog("ACCOUNT OVERDRAWN — draw on the credit line to continue operations.");
+      } else {
+        setDead(true);
+      }
     }
     if (newLeads.length) setTab("leads");
   };
@@ -396,7 +556,7 @@ function App() {
   const expand = () => {
     const next = CAPS[CAPS.indexOf(lotCap) + 1];
     const cost = CAP_COST[next];
-    if (cash < cost) return addLog("Insufficient funds for expansion.");
+    if (cash < cost) return setNotice(`Expansion to ${next} spots costs ${fmt(cost)} and you have ${fmt(cash)} in cash. Sell inventory or draw on the credit line first.`);
     setCash((v) => v - cost);
     setLotCap(next);
     addLog(`Lot expanded to ${next} units. Credit limit increased to ${fmt(LOAN_CAP[next])}. Auction run list enlarged.`);
@@ -417,15 +577,29 @@ function App() {
   const Book = ({ car }) => (
     <div style={{ display: "flex", gap: 0, marginTop: 6, borderRadius: 7, overflow: "hidden", border: "1px solid #232A36" }}>
       {[["MMR", car.mmr], ["Trade", car.tradeVal], ["Retail", car.retail]].map(([k, v], i) => (
-        <div key={k} style={{ flex: 1, textAlign: "center", padding: "5px 2px", background: i === 0 ? "#10141B" : i === 1 ? "#12161D" : "#0E1116", borderLeft: i ? "1px solid #232A36" : "none" }}>
+        <div key={k} style={{ flex: 1, textAlign: "center", padding: "5px 2px", background: "#0A0C10", borderLeft: i ? "1px solid #232A36" : "none" }}>
           <div style={{ fontSize: 10, color: "#8E939B", letterSpacing: 0.5, textTransform: "uppercase" }}>{k}</div>
           <div style={{ fontSize: 13, fontWeight: 800, color: i === 0 ? "#3B7BFF" : "#EDF1F7" }}>{fmt(v)}</div>
         </div>
       ))}
     </div>
   );
+  const Sentiment = ({ h }) => {
+    const [label, color] = sentimentLabel(h);
+    return (
+      <div style={{ marginTop: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
+          <span style={{ color: "#8E939B", letterSpacing: 0.5, textTransform: "uppercase" }}>Customer sentiment</span>
+          <span style={{ color, fontWeight: 700 }}>{label}</span>
+        </div>
+        <div style={{ height: 6, background: "#0A0C10", borderRadius: 3, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${h}%`, background: color, borderRadius: 3, transition: "width .2s ease, background .2s ease" }} />
+        </div>
+      </div>
+    );
+  };
 
-  const card = { background: "#151A22", border: "1px solid #232A36", borderRadius: 10, padding: "12px 14px", marginBottom: 10 };
+  const card = { background: "#101318", border: "1px solid #232A36", borderRadius: 10, padding: "12px 14px", marginBottom: 10 };
   const btn = (bg = "#3B7BFF", fg = "#FFFFFF") => ({
     background: bg, color: fg, border: "none", borderRadius: 7,
     padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer",
@@ -433,20 +607,25 @@ function App() {
   });
   const ghost = { ...btn("transparent", "#B9BDC4"), border: "1px solid #2C3442" };
   const sub = { color: "#8E939B", fontSize: 12 };
+  const slider = { width: "100%", accentColor: "#3B7BFF" };
   const creditChip = (c) => ({
     fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
     background: c === "prime" ? "#153D26" : c === "near-prime" ? "#3D3115" : "#3D1A15",
     color: c === "prime" ? "#3BD16F" : c === "near-prime" ? "#FFC42E" : "#FF5A48",
   });
 
-  if (!booted) {
-    return (
-      <div style={wrap}>
-        <FontLink />
-        <div style={{ textAlign: "center", paddingTop: 120, color: "#8E939B", fontSize: 13 }}>Loading…</div>
+  const Notice = () => notice && (
+    <div style={{
+      position: "fixed", inset: 0, background: "#000000CC", display: "flex",
+      alignItems: "center", justifyContent: "center", zIndex: 50, padding: 24,
+    }} onClick={() => setNotice(null)}>
+      <div style={{ ...card, maxWidth: 420, width: "100%", padding: "18px 18px 14px", border: "1px solid #2C3442" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, color: "#3B7BFF", textTransform: "uppercase", marginBottom: 8 }}>Notice</div>
+        <div style={{ color: "#EDF1F7", fontSize: 14, lineHeight: 1.55 }}>{notice}</div>
+        <button style={{ ...btn(), width: "100%", marginTop: 14 }} onClick={() => setNotice(null)}>Understood</button>
       </div>
-    );
-  }
+    </div>
+  );
 
   if (dead) {
     return (
@@ -463,77 +642,131 @@ function App() {
     );
   }
 
-  // ----- F&I DESK OVERLAY -----
+  // ----- F&I DESK -----
   if (deal) {
-    const { lead, car, price, terms } = deal;
-    const totalGross = (price - car.cost) + deal.back;
-    const soldProducts = PRODUCTS.reduce((s, p) => s + (deal.results[p.key] === "sold" ? p.price : 0), 0);
-    const financed = terms ? Math.max(0, price - terms.down + soldProducts) : 0;
-    const payment = terms ? pmt(financed, terms.apr, terms.months) : 0;
+    const d = deal;
+    const { lead, car, price, terms } = d;
+    const financed = dealFinanced(d);
+    const payment = terms ? pmt(financed, terms.sellRate, terms.months) : 0;
+    const reserve = dealReserve(d);
+    const back = dealBack(d);
+    const cov = VSC_COV[d.vsc.cov];
+    const term = VSC_TERM[d.vsc.term];
+    const vPrice = vscPrice(car, cov, term);
+    const vCost = vscCost(car, cov, term);
+    const vBump = terms ? pmt(vPrice, terms.sellRate, terms.months) : 0;
+    const vscOpen = d.vsc.result !== "sold" && d.vsc.result !== "declined";
     return (
       <div style={wrap}>
         <FontLink />
-        <div style={{ paddingTop: 18 }}>
+        <Notice />
+        <div style={{ paddingTop: 18, paddingBottom: 20 }}>
           <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: 2, color: "#3B7BFF" }}>F&I DESK</div>
           <div style={{ ...card, marginTop: 12 }}>
             <div style={{ fontWeight: 700, color: "#EDF1F7", fontSize: 15 }}>{lead.buyer} · {car.name}</div>
             <div style={{ marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span style={sub}>Selling at {fmt(price)} · front {fmt(price - car.cost)}</span>
-              {lead.payType === "finance"
+              {d.dealPay === "finance"
                 ? <span style={creditChip(lead.credit)}>{lead.credit.toUpperCase()} · APPROVED</span>
-                : <span style={{ ...creditChip("prime"), background: "#26282C", color: "#B9BDC4" }}>CASH BUYER</span>}
+                : <span style={{ ...creditChip("prime"), background: "#171B22", color: "#B9BDC4" }}>CASH BUYER</span>}
             </div>
-            {deal.reserve > 0 && <div style={{ ...sub, marginTop: 6, color: "#3BD16F" }}>Lender reserve: +{fmt(deal.reserve)}</div>}
+            {d.convertedNote && <div style={{ ...sub, marginTop: 6, color: "#FFC42E" }}>{d.convertedNote}</div>}
+            <Sentiment h={d.h} />
           </div>
 
           {terms && (
-            <div style={{ ...card, background: "#10141B", border: "1px solid #1E3A6E" }}>
+            <div style={{ ...card, background: "#0A0C10", border: "1px solid #1E3A6E" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 11, color: "#8E939B", letterSpacing: 0.5, textTransform: "uppercase" }}>Monthly payment</div>
                   <div style={{ fontWeight: 800, fontSize: 26, color: "#EDF1F7" }}>{fmt(payment)}<span style={{ fontSize: 13, fontWeight: 600, color: "#8E939B" }}>/mo</span></div>
                 </div>
                 <div style={{ textAlign: "right", fontSize: 12, color: "#B9BDC4", lineHeight: 1.6 }}>
-                  <div>{terms.apr}% APR · {terms.months} mo</div>
-                  <div>{fmt(terms.down)} down</div>
+                  <div>{terms.sellRate}% APR · {terms.months} mo</div>
+                  <div>{fmt(terms.down)} down{d.allowance > 0 ? ` + ${fmt(d.allowance)} trade` : ""}</div>
                   <div>{fmt(financed)} financed</div>
                 </div>
+              </div>
+              <div style={{ ...sub, marginTop: 8, paddingTop: 8, borderTop: "1px solid #1E3A6E" }}>
+                Buy rate {terms.buyRate}% · contracted at {terms.sellRate}% (2 pts held) · <span style={{ color: "#3BD16F" }}>participation {fmt(reserve)}</span>
               </div>
             </div>
           )}
 
-          <div style={{ ...sub, margin: "4px 0 8px" }}>Product menu — each product may be presented once.</div>
+          {/* VSC builder */}
+          <div style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Vehicle Service Contract</div>
+              {d.vsc.result === "sold" && <span style={{ fontWeight: 800, fontSize: 13, color: "#3BD16F" }}>SOLD</span>}
+              {d.vsc.result === "declined" && <span style={{ fontWeight: 800, fontSize: 13, color: "#FF5A48" }}>DECLINED</span>}
+              {d.vsc.result === "resisted" && <span style={{ fontWeight: 800, fontSize: 12, color: "#FFC42E" }}>RESISTED · 1 ATTEMPT LEFT</span>}
+            </div>
+            {vscOpen && (
+              <>
+                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                  {VSC_COV.map((c2, i) => {
+                    const blocked = c2.maxMiles && car.miles > c2.maxMiles;
+                    return (
+                      <button key={c2.key} onClick={() => blocked
+                        ? setNotice(`Exclusionary coverage is not available on this unit — administrator eligibility caps at ${c2.maxMiles.toLocaleString()} miles and this car shows ${car.miles.toLocaleString()}.`)
+                        : setDeal((x) => ({ ...x, vsc: { ...x.vsc, cov: i } }))}
+                        style={{ ...btn(d.vsc.cov === i && !blocked ? "#3B7BFF" : "#171B22", d.vsc.cov === i && !blocked ? "#fff" : blocked ? "#5C636E" : "#B9BDC4"), flex: 1, padding: "8px 4px", fontSize: 11 }}>
+                        {c2.name}{blocked ? " ✕" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                  {VSC_TERM.map((t2, i) => (
+                    <button key={t2.months} onClick={() => setDeal((x) => ({ ...x, vsc: { ...x.vsc, term: i } }))}
+                      style={{ ...btn(d.vsc.term === i ? "#3B7BFF" : "#171B22", d.vsc.term === i ? "#fff" : "#B9BDC4"), flex: 1, padding: "8px 2px", fontSize: 10.5 }}>
+                      {t2.months} mo / {t2.miles / 1000}k mi
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+                  <div style={sub}>{fmt(vPrice)}{terms ? ` · +$${Math.round(vBump)}/mo` : ""} · {fmt(vPrice - vCost)} profit</div>
+                  <button style={btn("#171B22", "#EDF1F7")} onClick={pitchVsc}>Present</button>
+                </div>
+              </>
+            )}
+            {d.vsc.result === "sold" && (
+              <div style={{ ...sub, marginTop: 6 }}>{VSC_COV[d.vsc.cov].name}, {VSC_TERM[d.vsc.term].months} mo / {VSC_TERM[d.vsc.term].miles / 1000}k mi · {fmt(d.vsc.soldPrice)} · {fmt(d.vsc.soldPrice - d.vsc.soldCost)} profit</div>
+            )}
+          </div>
+
+          <div style={{ ...sub, margin: "4px 0 8px" }}>Product menu — one presentation per product.</div>
           {PRODUCTS.map((p) => {
-            if (p.financeOnly && lead.payType !== "finance") return null;
-            const res = deal.results[p.key];
-            const bump = terms ? pmt(p.price, terms.apr, terms.months) : 0;
+            if (p.financeOnly && d.dealPay !== "finance") return null;
+            const res = d.results[p.key];
+            const bump = terms ? pmt(p.price, terms.sellRate, terms.months) : 0;
             return (
               <div key={p.key} style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>{p.name}</div>
-                  <div style={sub}>{fmt(p.price)}{terms ? ` · +$${Math.round(bump)}/mo` : " to buyer"} · {fmt(p.price - p.cost)} profit</div>
+                  <div style={sub}>{fmt(p.price)}{terms ? ` · +$${Math.round(bump)}/mo` : ""} · {fmt(p.price - p.cost)} profit</div>
                 </div>
                 {res ? (
                   <span style={{ fontWeight: 800, fontSize: 13, color: res === "sold" ? "#3BD16F" : "#FF5A48" }}>
                     {res === "sold" ? "SOLD" : "DECLINED"}
                   </span>
                 ) : (
-                  <button style={btn("#1C222C", "#EDF1F7")} onClick={() => pitch(p.key)}>Pitch</button>
+                  <button style={btn("#171B22", "#EDF1F7")} onClick={() => pitchProduct(p.key)}>Present</button>
                 )}
               </div>
             );
           })}
 
-          <div style={{ ...card, background: "#10141B" }}>
+          <div style={{ ...card, background: "#0A0C10" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: "#B9BDC4", fontSize: 14 }}>Deal total</span>
-              <Tag size={20}>{fmt(totalGross)} gross</Tag>
+              <Tag size={20}>{fmt((price - car.cost) + back)} gross</Tag>
             </div>
-            <div style={{ ...sub, marginTop: 2 }}>Front {fmt(price - car.cost)} + back {fmt(deal.back)}</div>
+            <div style={{ ...sub, marginTop: 2 }}>Front {fmt(price - car.cost)} + back {fmt(back)}</div>
           </div>
 
-          <button style={{ ...btn("#3BD16F", "#0E1116"), width: "100%", padding: "14px 0", fontSize: 15 }} onClick={fundDeal}>
-            {lead.payType === "finance" ? "Fund deal" : "Complete sale"}
+          <button style={{ ...btn("#3BD16F", "#000000"), width: "100%", padding: "14px 0", fontSize: 15 }} onClick={fundDeal}>
+            {d.dealPay === "finance" ? "Fund deal" : "Complete sale"}
           </button>
         </div>
       </div>
@@ -546,10 +779,12 @@ function App() {
   return (
     <div style={wrap}>
       <FontLink />
+      <Notice />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "14px 4px 10px" }}>
         <div>
           <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: 1.5, color: "#EDF1F7", lineHeight: 1 }}>USED CAR DEALER <span style={{ color: "#3B7BFF" }}>SIM</span></div>
           <div style={{ ...sub, marginTop: 2 }}>Day {day} · {lot.length}/{lotCap} units · Net {fmt(netWorth)}</div>
+          {dealerName && <div style={{ marginTop: 3, fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#3B7BFF" }}>{dealerName}</div>}
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontFamily: "'Inter', sans-serif", fontWeight: 800, fontSize: 22, color: cash < 5000 ? "#FF5A48" : "#EDF1F7" }}>{fmt(cash)}</div>
@@ -563,7 +798,7 @@ function App() {
         </button>
         {showHelp && (
           <div style={{ ...card, marginTop: 8, fontSize: 13, color: "#B9BDC4", lineHeight: 1.5 }}>
-            Acquire inventory at daily auction, complete reconditioning, and retail each unit against market value. Approximately 60% of customers finance; approved deals proceed to the F&I office, where product sales and lender reserve determine backend gross. The credit line carries 12% APR billed daily, with limits tied to lot capacity. Daily operating costs apply regardless of sales volume. Operations cease if the account is overdrawn with no available credit.
+            Acquire inventory at daily auction, complete reconditioning, and retail each unit against market value. Customer traffic is thin without marketing spend. Offers are worked with counter and trade-allowance controls — customer sentiment determines whether the numbers hold. Approximately 60% of customers finance: the lender approves the deal, the dealer contracts 2 points over the buy rate and holds the participation, and the product menu builds backend gross. Service contracts carry selectable coverage and term with two presentation attempts. The credit line carries 12% APR billed daily. Operations cease if the account is overdrawn with no available credit.
           </div>
         )}
       </div>
@@ -571,7 +806,7 @@ function App() {
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {[["lot", "Lot"], ["auction", "Auction"], ["leads", `Buyers${leads.length ? " · " + leads.length : ""}`], ["office", "Office"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} style={{
-            ...btn(tab === k ? "#3B7BFF" : "#1C222C", tab === k ? "#0E1116" : "#B9BDC4"),
+            ...btn(tab === k ? "#3B7BFF" : "#171B22", tab === k ? "#FFFFFF" : "#B9BDC4"),
             flex: 1, padding: "9px 4px",
           }}>{label}</button>
         ))}
@@ -593,7 +828,7 @@ function App() {
               {c.status === "recon" && !c.reconPaid && (
                 <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ color: "#FFC42E", fontSize: 13 }}>Reconditioning required — {fmt(c.reconActual)}</span>
-                  <button style={btn("#FFC42E", "#0E1116")} onClick={() => startRecon(c.id)}>Approve recon</button>
+                  <button style={btn("#FFC42E", "#000000")} onClick={() => startRecon(c.id)}>Approve recon</button>
                 </div>
               )}
               {c.status === "recon" && c.reconPaid && (
@@ -607,7 +842,7 @@ function App() {
                     <>
                       <input type="number" value={editPrice.val}
                         onChange={(e) => setEditPrice({ id: c.id, val: e.target.value })}
-                        style={{ width: 90, background: "#0E1116", color: "#EDF1F7", border: "1px solid #2C3442", borderRadius: 6, padding: "6px 8px", fontSize: 13 }} />
+                        style={{ width: 90, background: "#000000", color: "#EDF1F7", border: "1px solid #2C3442", borderRadius: 6, padding: "6px 8px", fontSize: 13 }} />
                       <button style={btn()} onClick={() => {
                         const v = Math.max(500, Math.round(Number(editPrice.val) / 100) * 100);
                         setLot((l) => l.map((x) => x.id === c.id ? { ...x, askPrice: v } : x));
@@ -627,7 +862,7 @@ function App() {
       {/* ---- AUCTION ---- */}
       {tab === "auction" && (
         <div>
-          <div style={{ ...sub, marginBottom: 8 }}>Daily run list · {auction.length} units · $350 buyer fee · $250 increments</div>
+          <div style={{ ...sub, marginBottom: 8 }}>Daily run list · {auction.length} units · $350 buyer fee · $250 increments{buyerHired ? " · your buyer works this sale at end of day" : ""}</div>
           {auction.map((c) => (
             <div key={c.id} style={{ ...card, opacity: c.closed ? 0.45 : 1 }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -645,8 +880,8 @@ function App() {
               <Book car={c} />
               {!c.closed && (
                 <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                  <button style={btn("#1C222C", "#EDF1F7")} onClick={() => bid(c.id)}>Bid {fmt(c.currentBid + 250)}</button>
-                  {c.leader === "you" && <button style={btn("#3BD16F", "#0E1116")} onClick={() => hammer(c.id)}>Buy at bid</button>}
+                  <button style={btn("#171B22", "#EDF1F7")} onClick={() => bid(c.id)}>Bid {fmt(c.currentBid + 250)}</button>
+                  {c.leader === "you" && <button style={btn("#3BD16F", "#000000")} onClick={() => hammer(c.id)}>Buy at bid</button>}
                 </div>
               )}
             </div>
@@ -654,39 +889,70 @@ function App() {
         </div>
       )}
 
-      {/* ---- LEADS ---- */}
+      {/* ---- LEADS / NEGOTIATION ---- */}
       {tab === "leads" && (
         <div>
-          {leads.length === 0 && <div style={{ ...card, ...sub }}>No active customers. Advance the day to generate traffic — competitive pricing increases lead volume.</div>}
+          {leads.length === 0 && <div style={{ ...card, ...sub }}>No active customers. Advance the day to generate traffic — marketing spend and competitive pricing drive lead volume.</div>}
           {leads.map((l) => {
             const car = lot.find((c) => c.id === l.carId);
             if (!car) return null;
-            const mid = Math.round(((l.offer + car.askPrice) / 2) / 100) * 100;
+            const counter = l.counter ?? l.offer;
+            const allowance = l.trade ? (l.allowance ?? l.trade.wants) : 0;
+            const h = sentiment(l, car);
+            const front = counter - car.cost;
             return (
               <div key={l.id} style={card}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div style={{ fontWeight: 700, color: "#EDF1F7", fontSize: 15 }}>{l.buyer} · {car.name}</div>
                   {l.payType === "finance"
                     ? <span style={creditChip(l.credit)}>{l.credit.toUpperCase()}</span>
-                    : <span style={{ ...creditChip("prime"), background: "#26282C", color: "#B9BDC4" }}>CASH</span>}
+                    : <span style={{ ...creditChip("prime"), background: "#171B22", color: "#B9BDC4" }}>CASH</span>}
                 </div>
                 <div style={{ ...sub, marginTop: 2 }}>Asking {fmt(car.askPrice)} · your cost {fmt(car.cost)}</div>
                 <div style={{ marginTop: 6, fontSize: 14, color: "#EDF1F7" }}>
                   Offer: <Tag>{fmt(l.offer)}</Tag>
-                  <span style={{ ...sub, marginLeft: 8 }}>({fmt(l.offer - car.cost)} front)</span>
                 </div>
-                {l.trade && (
-                  <div style={{ marginTop: 6, padding: "8px 10px", background: "#10141B", borderRadius: 7, fontSize: 13, color: "#B9BDC4" }}>
-                    Trade-in: <Light c={l.trade.light} />{l.trade.name}, {l.trade.miles.toLocaleString()} mi — requesting {fmt(l.trade.wants)} ACV
-                    <Book car={l.trade} />
-                    <div style={{ ...sub, marginTop: 4 }}>Reconditioning costs assessed after acquisition</div>
+
+                {!l.open ? (
+                  <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button style={btn("#3BD16F", "#000000")} onClick={() => startDeal(l, l.offer, l.trade ? l.trade.wants : 0, sentiment(l, car))}>Accept their terms</button>
+                    <button style={btn()} onClick={() => updLead(l.id, { open: true, counter: Math.round(((l.offer + car.askPrice) / 2) / 100) * 100 })}>Negotiate</button>
+                    <button style={ghost} onClick={() => { setLeads((ls) => ls.filter((x) => x.id !== l.id)); addLog(`Offer from ${l.buyer} declined.`); }}>Decline</button>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 10, padding: "10px 12px", background: "#0A0C10", borderRadius: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#B9BDC4" }}>
+                      <span>Your counter</span>
+                      <b style={{ color: "#EDF1F7" }}>{fmt(counter)} <span style={{ color: front >= 0 ? "#3BD16F" : "#FF5A48", fontWeight: 600 }}>({fmt(front)} front)</span></b>
+                    </div>
+                    <input type="range" style={slider} min={l.offer} max={car.askPrice} step={100}
+                      value={counter} onChange={(e) => updLead(l.id, { counter: Number(e.target.value) })} />
+
+                    {l.trade && (
+                      <>
+                        <div style={{ marginTop: 8, fontSize: 13, color: "#B9BDC4" }}>
+                          Trade-in: <Light c={l.trade.light} />{l.trade.name}, {l.trade.miles.toLocaleString()} mi — requesting {fmt(l.trade.wants)} ACV
+                        </div>
+                        <Book car={l.trade} />
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#B9BDC4", marginTop: 8 }}>
+                          <span>Your allowance</span>
+                          <b style={{ color: "#EDF1F7" }}>{fmt(allowance)}</b>
+                        </div>
+                        <input type="range" style={slider} min={500} max={l.trade.wants} step={100}
+                          value={allowance} onChange={(e) => updLead(l.id, { allowance: Number(e.target.value) })} />
+                        <div style={{ ...sub, marginTop: 2 }}>Reconditioning costs assessed after acquisition</div>
+                      </>
+                    )}
+
+                    <Sentiment h={h} />
+                    {l.attempts > 0 && <div style={{ ...sub, marginTop: 6, color: "#FFC42E" }}>They already declined once — last attempt.</div>}
+                    <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button style={btn("#3BD16F", "#000000")} onClick={() => submitDeal(l)}>Submit deal</button>
+                      <button style={ghost} onClick={() => updLead(l.id, { open: false })}>Back</button>
+                      <button style={ghost} onClick={() => { setLeads((ls) => ls.filter((x) => x.id !== l.id)); addLog(`Offer from ${l.buyer} declined.`); }}>Decline</button>
+                    </div>
                   </div>
                 )}
-                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button style={btn("#3BD16F", "#0E1116")} onClick={() => startDeal(l, l.offer)}>Accept offer</button>
-                  {!l.countered && <button style={btn()} onClick={() => counter(l)}>Counter {fmt(mid)}</button>}
-                  <button style={ghost} onClick={() => { setLeads((ls) => ls.filter((x) => x.id !== l.id)); addLog(`Offer from ${l.buyer} declined.`); }}>Decline</button>
-                </div>
               </div>
             );
           })}
@@ -706,22 +972,24 @@ function App() {
               ))}
             </div>
           </div>
+
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
               <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Credit line</div>
               <div style={sub}>{fmt(loan)} owed of {fmt(loanCap)} limit</div>
             </div>
-            <div style={{ height: 6, background: "#10141B", borderRadius: 3, margin: "8px 0 10px", overflow: "hidden" }}>
+            <div style={{ height: 6, background: "#0A0C10", borderRadius: 3, margin: "8px 0 10px", overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${Math.min(100, (loan / loanCap) * 100)}%`, background: loan / loanCap > 0.8 ? "#FF5A48" : "#3B7BFF", borderRadius: 3 }} />
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button style={btn("#1C222C", "#EDF1F7")} onClick={() => draw(10000)} disabled={credit <= 0}>Draw $10k</button>
-              <button style={btn("#1C222C", "#EDF1F7")} onClick={() => draw(25000)} disabled={credit <= 0}>Draw $25k</button>
-              <button style={ghost} onClick={() => repay(10000)} disabled={loan <= 0 || cash <= 0}>Repay $10k</button>
-              <button style={ghost} onClick={() => repay(loan)} disabled={loan <= 0 || cash <= 0}>Repay all</button>
+              <button style={btn("#171B22", "#EDF1F7")} onClick={() => draw(10000)}>Draw $10k</button>
+              <button style={btn("#171B22", "#EDF1F7")} onClick={() => draw(25000)}>Draw $25k</button>
+              <button style={ghost} onClick={() => repay(10000)}>Repay $10k</button>
+              <button style={ghost} onClick={() => repay(loan)}>Repay all</button>
             </div>
             <div style={{ ...sub, marginTop: 8 }}>12% APR simple interest, billed daily{loan > 0 ? ` · current cost ${fmt(Math.round(loan * (LINE_APR / 365)))}/day` : ""}. Limit scales with lot capacity.</div>
           </div>
+
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
@@ -732,7 +1000,7 @@ function App() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
               {MKT.map((t, i) => (
                 <button key={t.name} onClick={() => setMarketing(i)} style={{
-                  ...btn(marketing === i ? "#3B7BFF" : "#1C222C", marketing === i ? "#FFFFFF" : "#B9BDC4"),
+                  ...btn(marketing === i ? "#3B7BFF" : "#171B22", marketing === i ? "#FFFFFF" : "#B9BDC4"),
                   padding: "10px 6px", textAlign: "left",
                 }}>
                   <div style={{ fontSize: 13, fontWeight: 700 }}>{t.name}</div>
@@ -743,17 +1011,45 @@ function App() {
               ))}
             </div>
           </div>
+
+          {lotCap >= 30 && (
+            <div style={card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Used Car Buyer</div>
+                  <div style={sub}>{fmt(BUYER_WAGE)}/day · works the auction for you, buys under MMR, avoids red lights, max 3 units/day</div>
+                </div>
+                <button style={btn(buyerHired ? "#3BD16F" : "#171B22", buyerHired ? "#000000" : "#B9BDC4")} onClick={() => {
+                  setBuyerHired(!buyerHired);
+                  addLog(buyerHired ? "Used Car Buyer released." : "Used Car Buyer hired at $1,000/day. They work each day's sale at end of day.");
+                }}>
+                  {buyerHired ? "On staff" : "Hire"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {nextCap && (
             <div style={card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Expand the lot</div>
-                  <div style={sub}>{nextCap} spots for {fmt(CAP_COST[nextCap])} · expanded auction run list</div>
+                  <div style={sub}>{nextCap} spots for {fmt(CAP_COST[nextCap])} · expanded auction run list{lotCap === 10 ? " · unlocks Used Car Buyer" : ""}</div>
                 </div>
                 <button style={btn()} onClick={expand}>Expand</button>
               </div>
             </div>
           )}
+
+          <div style={card}>
+            <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14 }}>Dealership name</div>
+            <div style={{ ...sub, marginTop: 2 }}>Shown on the masthead</div>
+            <input
+              type="text" value={dealerName} maxLength={32} placeholder="e.g. Hutch Auto Group"
+              onChange={(e) => setDealerName(e.target.value)}
+              style={{ width: "100%", marginTop: 8, background: "#000000", color: "#EDF1F7", border: "1px solid #2C3442", borderRadius: 6, padding: "9px 10px", fontSize: 14, boxSizing: "border-box" }}
+            />
+          </div>
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
@@ -763,24 +1059,25 @@ function App() {
               <button style={{ ...ghost, color: "#FF5A48", borderColor: "#3D1A15" }} onClick={() => { if (window.confirm("Erase all progress and start a new game?")) newGame(); }}>New game</button>
             </div>
           </div>
+
           <div style={{ textAlign: "center", padding: "6px 0 2px", color: "#5C636E", fontSize: 11, letterSpacing: 0.5 }}>
             USED CAR DEALER SIM · CREATED BY HUTCHTHECARPLUG
           </div>
           <div style={{ ...card, maxHeight: 260, overflowY: "auto" }}>
             <div style={{ color: "#EDF1F7", fontWeight: 700, fontSize: 14, marginBottom: 6 }}>Log</div>
             {log.map((m, i) => (
-              <div key={i} style={{ ...sub, padding: "4px 0", borderBottom: i < log.length - 1 ? "1px solid #1C222C" : "none" }}>{m}</div>
+              <div key={i} style={{ ...sub, padding: "4px 0", borderBottom: i < log.length - 1 ? "1px solid #171B22" : "none" }}>{m}</div>
             ))}
           </div>
         </div>
       )}
 
-      <div style={{ position: "sticky", bottom: 0, paddingTop: 10, paddingBottom: 14, background: "linear-gradient(transparent, #0E1116 30%)" }}>
+      <div style={{ position: "sticky", bottom: 0, paddingTop: 10, paddingBottom: 14, background: "linear-gradient(transparent, #000000 30%)" }}>
         <button onClick={nextDay} style={{
           ...btn("#3B7BFF"), width: "100%", padding: "14px 0", fontSize: 15,
           boxShadow: "0 -4px 20px #00000066",
         }}>
-          End day {day} → (overhead {fmt(400 + lot.length * 15 + MKT[marketing].cost + Math.round(loan * (LINE_APR / 365)))})
+          End day {day} → (overhead {fmt(dailyOverhead())})
         </button>
       </div>
     </div>
@@ -788,7 +1085,7 @@ function App() {
 }
 
 const wrap = {
-  minHeight: "100vh", background: "#0E1116", padding: "0 14px",
+  minHeight: "100vh", background: "#000000", padding: "0 14px",
   maxWidth: 560, margin: "0 auto", fontFamily: "'Inter', system-ui, sans-serif",
 };
 
@@ -796,11 +1093,12 @@ function FontLink() {
   return (
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-      body { background: #0E1116; margin: 0; }
+      body { background: #000000; margin: 0; }
       * { font-variant-numeric: tabular-nums; }
       button { transition: opacity 0.12s ease; }
       button:active { transform: scale(0.98); opacity: 0.85; }
       input { font-family: 'Inter', sans-serif; }
+      input[type=range] { height: 26px; margin: 4px 0; }
       *::-webkit-scrollbar { width: 6px; }
       *::-webkit-scrollbar-thumb { background: #232A36; border-radius: 3px; }
     `}</style>
